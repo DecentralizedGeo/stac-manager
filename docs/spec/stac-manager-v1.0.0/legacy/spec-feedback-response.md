@@ -22,7 +22,6 @@ This document addresses all feedback points raised during specification review.
 **Your Comment**: "I'm guessing running the DiscoveryModule is a functional requirement to run before running this module?"
 
 **Change Made**: Added dependency note to IngestModule:
-
 - Can run standalone if `collection_ids` are provided in config
 - Typically depends on `DiscoveryModule` to get Collection objects from context
 - Added `collection_ids` option to config for direct collection specification
@@ -34,14 +33,12 @@ This document addresses all feedback points raised during specification review.
 **Your Comment**: "We should also be able to apply filters at the Item level... treat optional filters for collection and items differently"
 
 **Changes Made**:
-
 - Added Item-level filter support to IngestModule inputs
 - Filters include temporal, spatial, and query parameters (CQL2)
 - Explicitly noted: "Supports Item-level filters separate from Collection-level filters"
 - Example: Filter Collections broadly, then filter Items specifically (e.g., cloud cover < 10%)
 
 **YAML Config Example**:
-
 ```yaml
 - id: ingest
   module: IngestModule
@@ -60,20 +57,17 @@ This document addresses all feedback points raised during specification review.
 
 ### 4. ✅ **ScaffoldModule Enhanced for Collections and Templates**
 
-**Your Comments**:
-
+**Your Comments**: 
 - "What if I want to scaffold a blank template? Either a catalog, collection, or an item?"
 - "While this module 'scaffolds' items, what about collections?"
 
 **Changes Made**:
-
 - Updated purpose to include Collections and Catalogs
 - Added `mode` parameter: `items | collection | catalog | template`
 - **Template Mode**: Generate empty STAC objects for manual editing
 - **Collection Scaffolding**: Can scaffold Collections with proper structure
 
 **YAML Config Example**:
-
 ```yaml
 - id: scaffold_template
   module: ScaffoldModule
@@ -91,12 +85,10 @@ This document addresses all feedback points raised during specification review.
 **Your Comment**: "What if the transformed data doesn't have any geometry? Could we apply a default?"
 
 **Change Made**: Added geometry default support to ScaffoldModule:
-
 - Supports `null` geometry for non-spatial Items
 - Allows configurable default geometry (e.g., default bounding box)
 
 **YAML Config Example**:
-
 ```yaml
 - id: scaffold
   module: ScaffoldModule
@@ -114,7 +106,6 @@ This document addresses all feedback points raised during specification review.
 **Your Comment**: "I'm guessing the links will be relative?"
 
 **Change Made**: Explicitly documented link generation behavior:
-
 - **Relative by default**: `./collection.json`, `../items/item-001.json`
 - **Absolute if `base_url` provided**: `https://example.com/stac/collection.json`
 
@@ -125,7 +116,6 @@ This document addresses all feedback points raised during specification review.
 **Your Comment**: "Should we be able to specify and set default values for fields in YAML config?"
 
 **Change Made**: Added `defaults` section to ScaffoldModule config:
-
 - Can set default values for optional STAC fields
 - Examples: default license, providers, geometry
 - Prevents need to transform every field; can scaffold with sensible defaults
@@ -139,12 +129,10 @@ This document addresses all feedback points raised during specification review.
 **Your Comment**: "The input format would be a json or parquet file? I'd assume when modifying, it's for STAC Items that exist on disk"
 
 **Change Made**: Clarified UpdateModule can:
-
 - Load from `source_file` (JSON/Parquet on disk)
 - **OR** use Items from previous workflow step via `depends_on`
 
 **YAML Example**:
-
 ```yaml
 - id: update
   module: UpdateModule
@@ -164,7 +152,6 @@ This document addresses all feedback points raised during specification review.
 > **Multiple Workflows**: Currently, each YAML file defines a single workflow. To run different workflows, use separate YAML files and specify via `--config` flag. Future versions may support multiple workflow definitions in a single file with workflow selection.
 
 **Current Approach**: Use separate files for different workflows
-
 - `workflow-ingest.yaml`
 - `workflow-update.yaml`
 - `workflow-validate.yaml`
@@ -174,14 +161,12 @@ This document addresses all feedback points raised during specification review.
 ### 10. ✅ **STAC Best Practices for Directory Structure**
 
 **Your Important Comments on Item Layout**:
-
 - "Items should be stored in subdirectories... if there are usually sidecar files"
 - "Unless there are additional files to store alongside a given item, group items into a directory with name representing the item id"
 
 **Changes Made**: Updated JSON output file structure to follow [STAC Best Practices](https://github.com/radiantearth/stac-spec/blob/master/best-practices.md#catalog-layout):
 
 **New Structure** (organize_by: collection):
-
 ```
 output/
 ├── catalog.json
@@ -195,7 +180,6 @@ output/
 ```
 
 Added note explaining when to use flat vs. subdirectory structure:
-
 - Use subdirectories if workflow generates sidecar files (thumbnails, metadata)
 - Use `organize_by: flat` if no sidecar files needed
 
@@ -207,14 +191,12 @@ Added note explaining when to use flat vs. subdirectory structure:
 
 **Your Comment**: "How much does complexity increase if we add ability to discover items? Or is that the purpose of IngestModule?"
 
-**Answer**:
-
+**Answer**: 
 - **DiscoveryModule**: Focused on discovering **Collections** from STAC APIs
 - **IngestModule**: Focused on discovering/fetching **Items** from Collections
 - Separation of concerns keeps modules focused and testable
 
-**Rationale**:
-
+**Rationale**: 
 - Discovery workflow: Find Collections → Filter Collections → Fetch Items from Collections
 - IngestModule already handles Item discovery via `Client.search()`
 - Adding Item discovery to DiscoveryModule would duplicate functionality
@@ -252,7 +234,6 @@ With these refinements incorporated, the specifications are now ready for implem
 ✅ Clear I/O contracts  
 
 Please let me know if:
-
 1. Any of these changes need further refinement
 2. You'd like to discuss the DiscoveryModule/Items question
 3. You're ready to proceed to implementation planning

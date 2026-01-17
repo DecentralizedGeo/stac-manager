@@ -1,5 +1,4 @@
 # Technical Architecture Specification
-
 ## STAC Manager v1.0
 
 **Status**: Draft  
@@ -106,20 +105,17 @@ The system is organized into four distinct layers, each with clear responsibilit
 ### Layer 1: User Interface Layer
 
 **Responsibilities:**
-
 - Parse command-line arguments (CLI)
 - Expose Python library API
 - Load and validate YAML configuration files
 - Translate user intentions into workflow definitions
 
 **Components:**
-
 - `cli/` - Click-based CLI application
 - `config/` - Configuration loading and validation
 - Public Python API (module exports)
 
 **Key Decisions:**
-
 - CLI is a thin wrapper around the workflow orchestrator
 - Configuration parsing happens once at startup
 - Validation errors fail fast before workflow execution
@@ -127,7 +123,6 @@ The system is organized into four distinct layers, each with clear responsibilit
 ### Layer 2: Orchestration Layer
 
 **Responsibilities:**
-
 - Build workflow DAGs from configuration
 - Schedule and execute workflow steps
 - Manage step dependencies and parallelization
@@ -135,14 +130,12 @@ The system is organized into four distinct layers, each with clear responsibilit
 - Track workflow state and progress
 
 **Components:**
-
 - `WorkflowOrchestrator` - DAG builder and executor
 - `WorkflowContext` - Shared state across steps
 - `StepExecutor` - Individual step execution wrapper
 - `FailureCollector` - Error aggregation
 
 **Key Decisions:**
-
 - Orchestrator is stateless (can be serialized/resumed if needed in future)
 - Steps communicate via `WorkflowContext` (shared data structure)
 - Parallelization is automatic based on dependency graph
@@ -150,20 +143,17 @@ The system is organized into four distinct layers, each with clear responsibilit
 ### Layer 3: Business Logic Layer (Core Modules)
 
 **Responsibilities:**
-
 - Implement STAC catalog operations
 - Provide focused, composable capabilities
 - Enforce STAC spec compliance
 - Integrate with foundation libraries
 
 **Components:**
-
 - 8 core modules (Discovery, Ingest, Transform, Scaffold, Extension, Validate, Update, Output)
 - Each module implements `ModuleProtocol`
 - Submodules for complex domains (Transform, Extension, Ingest)
 
 **Key Decisions:**
-
 - Modules are stateless classes (instantiated per step)
 - All I/O operations return Python objects (not side effects)
 - Modules use dependency injection for testability
@@ -171,7 +161,6 @@ The system is organized into four distinct layers, each with clear responsibilit
 ### Layer 4: Foundation Layer (External Libraries)
 
 **Responsibilities:**
-
 - STAC data model and I/O (PySTAC)
 - API client functionality (pystac-client)
 - Validation logic (stac-validator)
@@ -180,13 +169,11 @@ The system is organized into four distinct layers, each with clear responsibilit
 - Data manipulation (pandas, pyarrow)
 
 **Components:**
-
 - Direct imports from stac-utils ecosystem
 - Standard library utilities
 - Third-party data processing libraries
 
 **Key Decisions:**
-
 - No custom STAC object models (use PySTAC)
 - No custom validation logic (use stac-validator)
 - Minimal wrappers around foundation libraries
@@ -215,24 +202,20 @@ This section defines the 8 core business logic modules. Each module implements t
 **Purpose**: Query STAC API endpoints to discover available collections and their metadata.
 
 **Inputs:**
-
 - Catalog URL (STAC API v1.0.0 endpoint)
 - Optional filters (collection IDs, temporal range, spatial bbox)
 
 **Outputs:**
-
 - List of `pystac.Collection` objects
 - Metadata for downstream processing
 
 **Design Approach:**
-
 - Wraps `pystac_client.Client` for API discovery
 - Supports filtering by collection ID patterns (wildcards, lists)
 - Handles pagination for large collection lists
 - Returns standard PySTAC objects (no custom models)
 
 **Key Methods:**
-
 ```python
 def discover_collections(
     catalog_url: str,
@@ -243,7 +226,6 @@ def discover_collections(
 ```
 
 **Error Handling:**
-
 - Network errors: Log and return empty list (collect-and-continue)
 - Invalid catalog URL: Fail fast with clear error message
 - Malformed collection metadata: Log warning, skip collection
@@ -255,19 +237,16 @@ def discover_collections(
 **Purpose**: Fetch STAC Items from collections with support for pagination and parallel/async retrieval.
 
 **Inputs:**
-
 - Collection ID or `pystac.Collection` object (from DiscoveryModule or direct config)
 - Pagination parameters (limit, cursor)
 - Concurrency configuration
 - **Item-level filters** (temporal, spatial, query parameters)
 
 **Outputs:**
-
 - Iterator/generator of `pystac.Item` objects
 - Failed Items log with error details
 
 **Design Approach:**
-
 - Uses `pystac_client.Client.search()` for Item retrieval
 - Implements async pagination with configurable batch sizes
 - Supports rate limiting to respect API constraints
@@ -275,18 +254,15 @@ def discover_collections(
 - Yields Items as they are fetched (streaming, not buffering all in memory)
 
 **Dependency Note:**
-
 - Can run standalone if `collection_ids` are provided in config
 - Typically depends on `DiscoveryModule` to get Collection objects from context
 
 **Potential Submodules (if complexity grows):**
-
 - `PaginationHandler`: Manages cursors and batch fetching
 - `RateLimiter`: Enforces rate limits with exponential backoff
 - `ItemFetcher`: Async HTTP client for raw Item JSON
 
 **Key Methods:**
-
 ```python
 async def fetch_items(
     collection: pystac.Collection,
@@ -296,7 +272,6 @@ async def fetch_items(
 ```
 
 **Error Handling:**
-
 - Item fetch failures: Log error, yield to failure collector, continue
 - Rate limiting (429 responses): Exponential backoff, retry
 - Network timeouts: Retry with backoff, eventually log and skip
@@ -308,18 +283,15 @@ async def fetch_items(
 **Purpose**: Transform heterogeneous source data (JSON, CSV, Parquet) into STAC-compatible field structures using declarative mapping schemas.
 
 **Inputs:**
-
 - Source data files or objects
 - Transformation schema (YAML/JSON mapping config)
 - Optional lookup tables or reference data
 
 **Outputs:**
-
 - Transformed data dictionaries ready for scaffolding
 - Transformation audit log
 
 **Design Approach:**
-
 - **DECOMPOSED** into submodules due to high complexity
 - Schema-driven transformations (declarative, not procedural)
 - Supports field mapping, type conversions, computed fields
@@ -328,29 +300,24 @@ async def fetch_items(
 **Submodules:**
 
 #### 3.1. SchemaLoader
-
 - Loads and validates transformation schema from YAML/JSON
 - Provides schema structure to other submodules
 
 #### 3.2. FieldMapper
-
 - Maps source fields to target STAC properties
 - Supports nested object paths (e.g., `source.metadata.date` → `properties.datetime`)
 - Handles missing fields with defaults or required checks
 
 #### 3.3. TypeConverter
-
 - Converts data types (string → datetime, array → single value, etc.)
 - Validates converted values
 - Handles RFC 3339 datetime formatting
 
 #### 3.4. DataNormalizer (optional, can defer)
-
 - Normalizes values (e.g., uppercase to lowercase, unit conversions)
 - Applies computed transformations (e.g., bbox from geometry)
 
 **Key Methods:**
-
 ```python
 def transform_data(
     source_data: dict | pd.DataFrame,
@@ -359,7 +326,6 @@ def transform_data(
 ```
 
 **Error Handling:**
-
 - Required field missing: Log error, add to failure report
 - Type conversion failure: Log warning, use default or skip field
 - Invalid schema: Fail fast at workflow start (config validation)
@@ -371,35 +337,28 @@ def transform_data(
 **Purpose**: Generate valid STAC v1.1.0 Items and Collections from transformed data or empty templates, ensuring all required fields are present.
 
 **Inputs:**
-
 - Transformed data dictionaries (from TransformModule) OR empty template request
 - Scaffold configuration (defaults, required fields, geometry defaults)
 
 **Outputs:**
-
 - Valid `pystac.Item` and/or `pystac.Collection` objects
 - Scaffold validation report
 
 **Design Approach:**
-
 - Uses `pystac.Item()` and `pystac.Collection()` constructors with required fields
 - Generates geometry and bbox from spatial metadata if present
 - **Supports default geometry** (null or configurable default polygon) when source data lacks geometry
-
-- # Template scaffolding (when mode: template)
-
+-    # Template scaffolding (when mode: template)
     template:
       type: catalog | collection | item
       output_path: string (where to write template JSON)
       include_sample_item: boolean (default: true for collection, creates full hierarchy)
-
 - Ensures STAC v1.1.0 compliance (required fields, valid GeoJSON)
 - Adds minimal required links (self, parent, collection)
 - **Link generation**: Links are relative by default (e.g., `./collection.json`, `../items/item-001.json`), or absolute if `base_url` is provided in config
 - **Field defaults**: Supports setting default values for optional fields via config (e.g., default license, default provider)
 
 **Key Methods:**
-
 ```python
 def scaffold_item(
     data: dict,
@@ -409,7 +368,6 @@ def scaffold_item(
 ```
 
 **Error Handling:**
-
 - Missing required STAC fields (id, geometry, bbox, properties.datetime): Log error, skip Item
 - Invalid geometry: Attempt repair with Shapely, else log and skip
 - Malformed datetime: Attempt parse with dateutil, else log and skip
@@ -421,18 +379,15 @@ def scaffold_item(
 **Purpose**: Apply STAC extensions (dgeo, alternate-assets, custom) to Items or Collections.
 
 **Inputs:**
-
 - Base STAC Item/Collection
 - Extension name or module path
 - Extension-specific configuration
 
 **Outputs:**
-
 - Extended STAC Item/Collection with extension fields
 - Extension validation report
 
 **Design Approach:**
-
 - **DECOMPOSED** to support pluggable architecture
 - Hybrid registry: shortcuts for built-ins, module paths for custom
 - Protocol-based extension interface for type safety
@@ -441,24 +396,20 @@ def scaffold_item(
 **Submodules:**
 
 #### 5.1. ExtensionRegistry
-
 - Maintains dictionary of built-in extension shortcuts
 - Maps extension names to module paths
 
 #### 5.2. ExtensionLoader
-
 - Loads extensions by name (registry) or module path (import)
 - Verifies extensions implement `Extension` Protocol
 - Caches loaded extensions for reuse
 
 #### 5.3. ExtensionApplicator
-
 - Applies extension fields to STAC objects
 - Manages `stac_extensions` array in metadata
 - Delegates to extension's `apply()` method
 
 **Key Methods:**
-
 ```python
 def apply_extension(
     item: pystac.Item,
@@ -468,7 +419,6 @@ def apply_extension(
 ```
 
 **Error Handling:**
-
 - Extension not found: Fail fast (config error)
 - Extension apply() failure: Log error, skip extension, continue
 - Validation failure: Log warning, optionally skip Item based on config
@@ -480,24 +430,20 @@ def apply_extension(
 **Purpose**: Validate STAC Items/Collections against STAC v1.1.0 spec and extension schemas.
 
 **Inputs:**
-
 - STAC Item/Collection objects
 - Extension schemas (URLs or local paths)
 - Validation configuration (strict vs permissive)
 
 **Outputs:**
-
 - Validation report (pass/fail, error details)
 - List of invalid Items
 
 **Design Approach:**
-
 - Thin wrapper around `stac_validator` from stac-utils
 - Validates core STAC spec + extension schemas
 - Batch validation for performance (validate multiple Items concurrently)
 
 **Key Methods:**
-
 ```python
 def validate_item(
     item: pystac.Item,
@@ -506,7 +452,6 @@ def validate_item(
 ```
 
 **Error Handling:**
-
 - Validation failures: Collect errors, add to failure report
 - Schema not found: Log warning, skip extension validation
 - Invalid JSON: Log error, mark Item as invalid
@@ -518,23 +463,19 @@ def validate_item(
 **Purpose**: Modify existing STAC Item/Collection metadata (properties, assets, links).
 
 **Inputs:**
-
 - Item/Collection ID or selection criteria
 - Update payload (new field values, additions, removals)
 
 **Outputs:**
-
 - Updated STAC objects
 - Change audit log
 
 **Design Approach:**
-
 - Supports field-level updates (set, delete, append to arrays)
 - Updates `updated` timestamp per STAC common metadata
 - Can operate on single Item or bulk selection
 
 **Key Methods:**
-
 ```python
 def update_item(
     item: pystac.Item,
@@ -544,7 +485,6 @@ def update_item(
 ```
 
 **Error Handling:**
-
 - Item not found: Log error, skip
 - Invalid update (e.g., set required field to null): Log error, skip update
 - Validation failure after update: Revert or log based on config
@@ -556,26 +496,22 @@ def update_item(
 **Purpose**: Write STAC metadata to persistent storage in JSON or Parquet format.
 
 **Inputs:**
-
 - STAC Items/Collections/Catalogs
 - Output format (JSON, Parquet)
 - Output directory or cloud path
 - Organization strategy (flat or by item ID)
 
 **Outputs:**
-
 - Organized STAC files on disk or cloud storage
 - Output manifest (list of files written)
 
 **Design Approach:**
-
 - Uses `pystac.Item.to_dict()` for JSON serialization
 - Uses `stac_geoparquet` for Parquet conversion
 - Supports hierarchical directory structure (catalog/collection/items/)
 - Generates output manifest for downstream ingestion (e.g., pgstac)
 
 **Key Methods:**
-
 ```python
 def write_items(
     items: Iterable[pystac.Item],
@@ -586,7 +522,6 @@ def write_items(
 ```
 
 **Error Handling:**
-
 - Write failures (disk full, permissions): Log error, skip file, continue
 - Invalid path: Fail fast (config validation)
 - Format conversion errors: Log error, skip Item
@@ -634,7 +569,6 @@ class ModuleProtocol(Protocol):
 ```
 
 **Design Notes:**
-
 - Modules are async to support concurrent orchestration
 - `WorkflowContext` provides dependency injection (config, logger, shared data)
 - Return values are stored in `context.data[step_id]` for downstream steps
@@ -1851,3 +1785,4 @@ This Technical Architecture Specification defines:
 9. **Foundation library integration**: Direct use of stac-utils ecosystem
 
 The architecture supports all PRD requirements while maintaining modularity, extensibility, and production-grade reliability.
+

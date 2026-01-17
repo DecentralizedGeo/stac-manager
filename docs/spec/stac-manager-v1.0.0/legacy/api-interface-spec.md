@@ -1,5 +1,4 @@
 # API/Interface Specification
-
 ## STAC Manager v1.0
 
 **Status**: Draft  
@@ -45,7 +44,6 @@ stac-manager [OPTIONS] COMMAND [ARGS]...
 ```
 
 **Global Options:**
-
 - `--config PATH`: Path to YAML configuration file (default: `./config.yaml`)
 - `--log-level [DEBUG|INFO|WARNING|ERROR]`: Override log level from config
 - `--log-file PATH`: Override log file path from config
@@ -61,13 +59,11 @@ stac-manager run-workflow --config WORKFLOW.yaml [OPTIONS]
 ```
 
 **Options:**
-
 - `--config PATH`: Path to workflow YAML file (required)
 - `--dry-run`: Validate workflow without executing
 - `--output-failures PATH`: Path for failure report JSON (default: `./failures.json`)
 
 **Example:**
-
 ```bash
 stac-manager run-workflow --config workflows/cmr-stac-ingest.yaml
 ```
@@ -79,13 +75,11 @@ stac-manager validate-workflow --config WORKFLOW.yaml
 ```
 
 **Output:**
-
 - Validation errors (if any)
 - Workflow DAG visualization (mermaid diagram)
 - Exit code 0 if valid, 1 if invalid
 
 **Example:**
-
 ```bash
 stac-manager validate-workflow --config my-workflow.yaml
 ```
@@ -97,13 +91,11 @@ stac-manager discover --catalog-url URL [OPTIONS]
 ```
 
 **Options:**
-
 - `--catalog-url URL`: STAC API endpoint (required)
 - `--collection-ids ID [ID...]`: Filter by collection IDs
 - `--output PATH`: Save results to JSON file (default: stdout)
 
 **Example:**
-
 ```bash
 stac-manager discover \
   --catalog-url https://cmr.earthdata.nasa.gov/stac/v1 \
@@ -117,13 +109,11 @@ stac-manager validate-stac --input PATH [OPTIONS]
 ```
 
 **Options:**
-
 - `--input PATH`: Path to STAC JSON file or directory (required)
 - `--extensions URL [URL...]`: Additional extension schemas to validate
 - `--strict`: Fail on warnings
 
 **Example:**
-
 ```bash
 stac-manager validate-stac \
   --input ./output/items/ \
@@ -137,7 +127,6 @@ stac-manager list-extensions
 ```
 
 **Output:**
-
 ```
 Built-in Extensions:
   - dgeo (DecentralizedGeo Extension)
@@ -502,7 +491,6 @@ This section defines the input and output contracts for each module.
 ### DiscoveryModule
 
 **Input (config):**
-
 ```python
 {
     'catalog_url': str,                    # Required
@@ -520,7 +508,6 @@ This section defines the input and output contracts for each module.
 ```
 
 **Output:**
-
 ```python
 list[pystac.Collection]  # List ofCollection objects
 ```
@@ -530,7 +517,6 @@ list[pystac.Collection]  # List ofCollection objects
 ### IngestModule
 
 **Input (config):**
-
 ```python
 {
     'limit': int | None,           # Optional, max items to fetch
@@ -540,7 +526,6 @@ list[pystac.Collection]  # List ofCollection objects
 ```
 
 **Input (context.data):**
-
 ```python
 {
     'discover': list[pystac.Collection]  # From DiscoveryModule
@@ -548,7 +533,6 @@ list[pystac.Collection]  # List ofCollection objects
 ```
 
 **Output:**
-
 ```python
 list[pystac.Item]  # List of Item objects
 ```
@@ -558,7 +542,6 @@ list[pystac.Item]  # List of Item objects
 ### TransformModule
 
 **Input (config):**
-
 ```python
 {
     'source_file': str,            # Path to source data file
@@ -568,17 +551,14 @@ list[pystac.Item]  # List of Item objects
 ```
 
 **Input (context.data):**
-
 - None (reads from source file)
 
 **Output:**
-
 ```python
 list[dict]  # List of transformed data dictionaries
 ```
 
 **Transformation Schema Format:**
-
 ```yaml
 mappings:
   - source_field: source.metadata.datetime
@@ -597,7 +577,6 @@ mappings:
 ### ScaffoldModule
 
 **Input (config):**
-
 ```python
 {
     'collection_id': str,          # Required
@@ -606,7 +585,6 @@ mappings:
 ```
 
 **Input (context.data):**
-
 ```python
 {
     'transform': list[dict]        # From TransformModule
@@ -614,7 +592,6 @@ mappings:
 ```
 
 **Output:**
-
 ```python
 list[pystac.Item]  # List of scaffolded STAC Items
 ```
@@ -624,7 +601,6 @@ list[pystac.Item]  # List of scaffolded STAC Items
 ### ExtensionModule
 
 **Input (config):**
-
 ```python
 {
     'extension': str,              # Extension name or module path
@@ -633,7 +609,6 @@ list[pystac.Item]  # List of scaffolded STAC Items
 ```
 
 **Input (context.data):**
-
 ```python
 {
     'items': list[pystac.Item]    # From previous step
@@ -641,7 +616,6 @@ list[pystac.Item]  # List of scaffolded STAC Items
 ```
 
 **Output:**
-
 ```python
 list[pystac.Item]  # List of Items with extension fields applied
 ```
@@ -651,7 +625,6 @@ list[pystac.Item]  # List of Items with extension fields applied
 ### ValidateModule
 
 **Input (config):**
-
 ```python
 {
     'strict': bool,                      # Default False
@@ -660,7 +633,6 @@ list[pystac.Item]  # List of Items with extension fields applied
 ```
 
 **Input (context.data):**
-
 ```python
 {
     'items': list[pystac.Item]          # From previous step
@@ -668,7 +640,6 @@ list[pystac.Item]  # List of Items with extension fields applied
 ```
 
 **Output:**
-
 ```python
 list[pystac.Item]  # List of valid Items (invalid ones logged to failures)
 ```
@@ -678,7 +649,6 @@ list[pystac.Item]  # List of valid Items (invalid ones logged to failures)
 ### UpdateModule
 
 **Input (config):**
-
 ```python
 {
     'updates': dict,               # Field paths to new values
@@ -687,7 +657,6 @@ list[pystac.Item]  # List of valid Items (invalid ones logged to failures)
 ```
 
 **Input (context.data):**
-
 ```python
 {
     'items': list[pystac.Item]    # From previous step
@@ -695,7 +664,6 @@ list[pystac.Item]  # List of valid Items (invalid ones logged to failures)
 ```
 
 **Output:**
-
 ```python
 list[pystac.Item]  # List of updated Items
 ```
@@ -705,7 +673,6 @@ list[pystac.Item]  # List of updated Items
 ### OutputModule
 
 **Input (config):**
-
 ```python
 {
     'format': 'json' | 'parquet',         # Required
@@ -715,7 +682,6 @@ list[pystac.Item]  # List of updated Items
 ```
 
 **Input (context.data):**
-
 ```python
 {
     'items': list[pystac.Item]            # From previous step
@@ -723,7 +689,6 @@ list[pystac.Item]  # List of updated Items
 ```
 
 **Output:**
-
 ```python
 {
     'files_written': list[str],            # Paths to output files
@@ -863,7 +828,6 @@ steps:
 ```
 
 **Generated Structure:**
-
 ```
 templates/my-collection/
 ├── collection.json              # Collection template
@@ -873,7 +837,6 @@ templates/my-collection/
 ```
 
 **collection.json** (minimal valid template):
-
 ```json
 {
   "type": "Collection",
@@ -893,7 +856,6 @@ templates/my-collection/
 ```
 
 **items/sample-item/sample-item.json** (minimal valid Item template):
-
 ```json
 {
   "type": "Feature",
@@ -963,7 +925,6 @@ output/
 > **Item Directory Structure**: With `organize_by: item_id`, each Item is stored in a subdirectory under `items/` named by its `id` (e.g., `items/item_001/item_001.json`). This follows STAC best practices and allows for sidecar files (thumbnails, metadata, etc.) to be stored alongside the Item JSON. If your workflow does not generate sidecar files, use `organize_by: flat` to place all Items directly in the `items/` directory.
 
 **File Structure (organize_by: flat):**
-
 ```
 output/
 ├── items/
@@ -1005,7 +966,6 @@ Standard STAC v1.1.0 JSON (pretty-printed):
 ### Parquet Output
 
 **File Structure:**
-
 ```
 output/
 ├── items.parquet                   # All items in single file (flat mode)
@@ -1013,7 +973,6 @@ output/
 ```
 
 **OR (organize_by: collection):**
-
 ```
 output/
 ├── collection_A.parquet
@@ -1030,7 +989,6 @@ Uses `stac-geoparquet` library for conversion. Schema includes:
 - Metadata columns: `stac_version`, `stac_extensions`, `id`
 
 **Reading Parquet Output:**
-
 ```python
 import pandas as pd
 import stac_geoparquet
@@ -1087,3 +1045,4 @@ This API/Interface Specification defines:
 6. **Output Formats**: JSON and Parquet output structures with manifest generation
 
 These interfaces provide comprehensive user-facing APIs for both declarative (YAML) and programmatic (Python) usage of the toolkit.
+
