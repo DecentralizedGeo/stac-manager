@@ -22,6 +22,10 @@ class StacManager:
         )
         self.instances = {}
         
+    @property
+    def failure_collector(self):
+        return self.context.failure_collector
+
     def _instantiate_modules(self):
         for step in self.config.steps:
             cls = get_module_class(step.module)

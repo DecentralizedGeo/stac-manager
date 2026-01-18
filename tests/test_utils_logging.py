@@ -1,6 +1,6 @@
 import os
 import logging
-from stac_manager.logging import setup_logger
+from stac_manager.log_utils import setup_logger
 from stac_manager.utils import substitute_env_vars
 from stac_manager.exceptions import ConfigurationError
 import pytest
