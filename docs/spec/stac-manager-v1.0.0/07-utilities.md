@@ -366,13 +366,13 @@ def validate_and_repair_geometry(geometry: dict) -> tuple[dict | None, list[str]
 
 ## 6. State Persistence (Checkpointing)
 
-### 5.1 Purpose
+### 6.1 Purpose
 Allow long-running async workflows to resume from where they left off after a crash or interruption.
 
-### 5.2 Detailed Specification
+### 6.2 Detailed Specification
 See [State Persistence & Recovery](./08-state-persistence.md) for the complete architecture, data schema, and API definition.
 
-### 5.3 Shared Pattern: Atomic Output
+### 6.3 Shared Pattern: Atomic Output
 (Moved to [08-state-persistence.md](./08-state-persistence.md#5-atomic-write-strategy))
 
 Modules writing files MUST follow the atomic write protocols defined in the State Persistence spec.
@@ -381,7 +381,7 @@ Modules writing files MUST follow the atomic write protocols defined in the Stat
 
 ## 7. Logging Utilities
 
-### 6.1 Logger Setup
+### 7.1 Logger Setup
 
 **Purpose**: Configure structured logger from workflow config
 
@@ -412,7 +412,7 @@ def setup_logger(config: dict) -> logging.Logger:
     ...
 ```
 
-### 6.2 Structured Logging Pattern
+### 7.2 Structured Logging Pattern
 
 **Module Logging Convention**:
 ```python
@@ -440,10 +440,10 @@ async def execute(self, context: WorkflowContext):
 
 ## 8. Processing Summary Generator
 
-### 7.1 Purpose
+### 8.1 Purpose
 Create human-readable summary of workflow execution results
 
-### 7.2 Function Signature
+### 8.2 Function Signature
 
 ```python
 def generate_processing_summary(
@@ -478,7 +478,7 @@ def generate_processing_summary(
     ...
 ```
 
-### 7.3 Usage
+### 8.3 Usage
 
 ```python
 # In CLI or StacManager
@@ -491,7 +491,7 @@ print(summary)
 
 ## 9. Configuration Validation
 
-### 8.1 Workflow Config Validator
+### 9.1 Workflow Config Validator
 
 **Purpose**: Validate workflow YAML before execution
 
@@ -532,10 +532,10 @@ if errors:
 
 ## 10. Environment Variable Substitution
 
-### 9.1 Purpose
+### 10.1 Purpose
 Resolve `${VAR_NAME}` placeholders in config from environment variables
 
-### 9.2 Function Signature
+### 10.2 Function Signature
 
 ```python
 def substitute_env_vars(config: dict) -> dict:
@@ -563,7 +563,7 @@ def substitute_env_vars(config: dict) -> dict:
 
 ## 11. Implementation Notes
 
-### 10.1 Library Choices
+### 11.1 Library Choices
 
 These utilities can be implemented using:
 
@@ -579,7 +579,7 @@ These utilities can be implemented using:
 - `logging` (stdlib) - Standard Python logging
 - Optional: `structlog` for structured JSON logs
 
-### 10.2 Testing Considerations
+### 11.2 Testing Considerations
 
 Utilities should have comprehensive unit tests:
 - Rate limiter: Test request spacing, concurrency limits

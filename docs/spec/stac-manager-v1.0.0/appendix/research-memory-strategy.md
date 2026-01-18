@@ -2,6 +2,7 @@
 
 **Status**: Accepted Strategy
 **Related Components**: `IngestModule`, `OutputModule`, `WorkflowOrchestrator`, `TransformModule`
+**NOTE**: This document is a research artifact that will be applied in version 1.1.
 
 ---
 

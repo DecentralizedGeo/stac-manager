@@ -6,7 +6,11 @@
 ---
 
 ## 1. Purpose
-The Discovery Module is responsible for querying STAC API endpoints to find available Collections and their metadata. It acts as the entry point for API-based workflows.
+The Discovery Module is responsible for querying STAC API endpoints to find available Collections and their metadata. It acts as the primary **entry point** for most API-based workflows.
+
+It manages the process of establishing a valid `pystac_client` connection by:
+1.  **Verifying Existence**: Calls `client.get_collection("your-collection-id")` to confirm the collection exists. If no collection is returned, the module fails fast, preventing invalid workflows.
+2.  **Preparing Search**: If valid, it initializes the context for an `ItemSearch` object (via `client.search(collection=collection)`), which is the key component required by the downstream [Ingest Module](./ingest.md) to fetch items.
 
 ## 2. Architecture
 - **Role**: `Fetcher` (Source).
@@ -52,9 +56,12 @@ class DiscoveryConfig(BaseModel):
 **Input (Workflow Context)**:
 - None (First step trigger) or previous step data (ignored).
 
+**Side Effects (Workflow Context)**:
+- Populates `context.data['item_search']` (or specific collection keys) with the verified `Collection` object or `ItemSearch` configuration parameters needed by the Ingest module.
+
 **Output (Python)**:
 ```python
-AsyncIterator[dict]  # Yields STAC Collections as dictionaries
+AsyncIterator[dict]  # Yields STAC Collections as dictionaries to trigger the Orchestrator's parallel pipeline
 ```
 
 ## 5. Error Handling

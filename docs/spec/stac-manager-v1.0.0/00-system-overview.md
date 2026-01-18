@@ -8,7 +8,7 @@
 ---
 
 ## 0. System Requirements
-- **Python**: 3.10+ (Required for structural pattern matching and type hinting features)
+- **Python**: 3.12+ (Required for structural pattern matching and type hinting features)
 - **OS**: Linux, macOS, Windows
 - **Core Dependencies**:
     - `pystac>=1.10.0`

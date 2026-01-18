@@ -2,6 +2,7 @@
 
 **Status**: Analysis Complete  
 **Related Components**: `WorkflowOrchestrator`, `CheckpointManager`, `OutputModule`
+**NOTE**: This document is a research artifact that will be applied in version 1.1.
 
 ---
 

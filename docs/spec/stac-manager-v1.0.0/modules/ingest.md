@@ -17,6 +17,7 @@ Fetching data from APIs at scale requires careful resource management.
 
 ### 2.1 ItemFetcher
 - **Responsibility**: High-throughput data fetching.
+- **Context**: Leverages the pre-validated `ItemSearch` setup provided by the upstream **Discovery** step (via `WorkflowContext`).
 - **Strategy**: **Native Async Search** (Strategy B).
   - Use `aiohttp` for raw JSON fetching (non-blocking I/O).
   - Use `pystac` only for parsing (CPU-bound).
@@ -87,6 +88,7 @@ class IngestFilters(BaseModel):
     query: Optional[Dict[str, Any]] = None 
     """
     STAC API Query Extension parameters (JSON body).
+    These filters are **applied to** the base ItemSearch object retrieved from WorkflowContext.
     See: [STAC Item Search filter parameter](https://api.stacspec.org/v1.0.0-rc.1/item-search/#tag/Item-Search/operation/postItemSearch)
     """
 
@@ -109,7 +111,7 @@ class IngestConfig(BaseModel):
 ```
 
 > [!NOTE]
-> **catalog_url**: When operating in API Crawl mode, the `catalog_url` is inherited from `context.data['catalog_url']` set by the upstream Discovery step. See [Configuration - Runtime Data Sharing](../03-configuration.md#44-runtime-data-sharing-via-workflowcontext).
+> **ItemSearch Context**: When operating in API Crawl mode, the module expects the upstream Discovery step to have populated `context.data` with the necessary `ItemSearch` context (e.g. valid collection object or connection parameters). The `IngestFilters` are applied on top of this base context.
 
 ### 3.1 Example Usage (YAML)
 
@@ -131,7 +133,7 @@ class IngestConfig(BaseModel):
 
 **Input (Workflow Context)**:
 - `collection_id` from config (required).
-- `catalog_url` inherited from `context.data['catalog_url']` (for API mode).
+- `context.data['item_search']` (or equivalent per-collection key): The base `ItemSearch` configuration object or parameters provided by the Discovery step (Required for API mode).
 
 **Output (Python)**:
 ```python
