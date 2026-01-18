@@ -1,1 +1,12 @@
 .venv
+
+# Doc files
+/docs/plans
+
+# Python related context
+__pycache__
+
+# log files and data
+logs
+results
+data
