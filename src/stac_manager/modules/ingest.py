@@ -10,7 +10,7 @@ class IngestFilters(BaseModel):
     query: Optional[Dict[str, Any]] = None
 
 class IngestConfig(BaseModel):
-    collection_id: str
+    collection_id: Optional[str] = None
     source_file: Optional[str] = None
     limit: Optional[int] = Field(None, gt=0)
     concurrency: int = Field(default=5, ge=1)
