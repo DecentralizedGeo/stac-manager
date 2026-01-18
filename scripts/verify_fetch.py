@@ -60,7 +60,7 @@ async def run_verification():
     
     print(f"Fetching items from collection: HLSS30_2.0 ...")
     item_count = 0
-    max_items = 10
+    max_items = 100
     
     async for item in ingest.fetch(ctx):
         item_count += 1

@@ -5,7 +5,10 @@ from stac_manager.context import WorkflowContext
 
 @pytest.mark.asyncio
 async def test_ingest_fetch():
-    config = {"collection_id": "coll1"}
+    config = {
+        "collection_id": "coll1",
+        "limit": 10
+    }
     module = IngestModule(config)
     
     ctx = MagicMock(spec=WorkflowContext)
@@ -16,6 +19,7 @@ async def test_ingest_fetch():
         mock_search = mock_client_instance.search.return_value
         
         mock_item = MagicMock()
+        mock_item.id = "item1" # Fix for attribute access
         mock_item.to_dict.return_value = {"id": "item1"}
         mock_search.items.return_value = [mock_item]
         
@@ -25,3 +29,9 @@ async def test_ingest_fetch():
             
         assert len(items) == 1
         assert items[0]['id'] == "item1"
+        
+        # Verify search called with limits
+        mock_client_instance.search.assert_called_with(
+            collections=["coll1"],
+            max_items=10
+        )

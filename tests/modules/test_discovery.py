@@ -29,3 +29,4 @@ async def test_discovery_fetch():
         assert len(items) == 1
         assert items[0]['id'] == "coll1"
         assert ctx.data['catalog_url'] == "https://example.com/stac"
+        assert 'discovery_filters' in ctx.data

@@ -15,4 +15,5 @@ steps:
     module: IngestModule
     config:
       collection_id: "HLSS30_2.0"
+      limit: 100
     depends_on: ["discovery"]
