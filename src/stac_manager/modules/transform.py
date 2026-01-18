@@ -12,6 +12,7 @@ class MappingRule(BaseModel):
 
 class TransformConfig(BaseModel):
     mappings: List[MappingRule]
+    strategy: Literal['new', 'merge'] = 'new'
 
 class TransformModule:
     """Transforms raw dicts to STAC-like structure using JMESPath."""
@@ -25,7 +26,13 @@ class TransformModule:
         ]
     
     def modify(self, item: dict, context: WorkflowContext) -> dict | None:
-        result = {"properties": {}} # Minimal init
+        if self.config.strategy == 'merge':
+            import copy
+            result = copy.deepcopy(item)
+            if "properties" not in result:
+                result["properties"] = {}
+        else:
+            result = {"properties": {}} # Minimal init
         
         for expression, rule in self.compiled_rules:
             value = expression.search(item)

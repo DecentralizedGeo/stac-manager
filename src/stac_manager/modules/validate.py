@@ -25,7 +25,13 @@ class ValidateModule:
             return item
         else:
             # Log failure
-            # stac-validator usually stores messages in .message attribute list/dict
             msg = getattr(self.validator, 'message', "Validation failed")
+            print(f"Validation failed for item {item.get('id')}: {msg}. Strict: {self.config.strict}")
             context.failure_collector.add(item.get('id', 'unknown'), str(msg), step_id='validate')
-            return None
+            
+            if self.config.strict:
+                return None
+            
+            # If not strict, warn but pass through
+            # Could optionally attach validation error to item properties
+            return item
