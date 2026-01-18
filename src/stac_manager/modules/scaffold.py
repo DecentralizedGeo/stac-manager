@@ -4,6 +4,7 @@ import pystac
 from pystac import utils as pystac_utils
 from stac_manager.context import WorkflowContext
 import datetime
+from stac_manager.utils import ensure_bbox
 
 class Provider(BaseModel):
     name: str
@@ -57,7 +58,7 @@ class ScaffoldModule:
             pystac_item = pystac.Item(
                 id=oid,
                 geometry=geom,
-                bbox=None, # TODO: integrate ensure_bbox from utils when available
+                bbox=ensure_bbox(geom), 
                 datetime=dt,
                 properties=props
             )

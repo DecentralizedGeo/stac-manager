@@ -42,3 +42,14 @@ async def retry_with_backoff(
             delay = min(base_delay * (exponential_base ** (attempt - 1)), max_delay)
             # Log warning here in real code
             await asyncio.sleep(delay)
+
+import shapely.geometry
+
+def ensure_bbox(geometry: dict | None) -> list[float] | None:
+    if not geometry:
+        return None
+    try:
+        shape = shapely.geometry.shape(geometry)
+        return list(shape.bounds)
+    except Exception:
+        return None
