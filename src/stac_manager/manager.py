@@ -42,27 +42,44 @@ class StacManager:
         # Execute based on role
         if hasattr(instance, 'fetch'):
             # Fetchers typically start the stream or take context input
-            result = instance.fetch(self.context)
+            gen = instance.fetch(self.context)
+            # Materialize results to ensure side-effects (like context updates) occur
+            # and to allow simple downstream dependency handling for v1.0.0
+            result = [item async for item in gen]
+            print(f"Fetched {result.__len__()} items")
         elif hasattr(instance, 'modify'):
             # Manual pipe since modifiers are sync
-            # Assumes input_data is an AsyncIterator or iterable
+            # Assumes input_data is an AsyncIterator or iterable (list)
             async def pipe(source):
                 if not source:
                     return # Or empty stream
-                async for item in source:
-                    res = instance.modify(item, self.context)
-                    if res:
-                        yield res
+                    
+                # Handle list (materialized upstream) vs AsyncIterator (streamed upstream)
+                if isinstance(source, list):
+                    for item in source:
+                        res = instance.modify(item, self.context)
+                        if res:
+                            yield res
+                else:
+                    async for item in source:
+                        res = instance.modify(item, self.context)
+                        if res:
+                            yield res
+                            
             result = pipe(input_data)
         elif hasattr(instance, 'bundle'):
             # Bundlers consume the stream
             if input_data:
-                async for item in input_data:
-                    instance.bundle(item, self.context)
-            result = instance.finalize(self.context)
+                # If input_data is a list (materialized from fetch), iterate it
+                if isinstance(input_data, list):
+                    for item in input_data:
+                        await instance.bundle(item, self.context)
+                else:
+                    async for item in input_data:
+                        await instance.bundle(item, self.context)
+            result = await instance.finalize(self.context)
         else:
             raise ModuleException(f"Module {step_id} has no valid role method (fetch, modify, bundle)")
-            
         self.context.data[step_id] = result
 
     async def execute(self):

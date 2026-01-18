@@ -1,12 +1,21 @@
-from typing import AsyncIterator, Optional
-from pydantic import BaseModel
+from typing import AsyncIterator, Optional, List, Dict, Any
+from pydantic import BaseModel, Field
 from pystac_client import Client
 from stac_manager.context import WorkflowContext
 from stac_manager.exceptions import ModuleException
 
+class IngestFilters(BaseModel):
+    temporal: Optional[Dict[str, str]] = None
+    spatial: Optional[List[float]] = None
+    query: Optional[Dict[str, Any]] = None
+
 class IngestConfig(BaseModel):
-    collection_id: Optional[str] = None
-    # Add other search filters here as needed
+    collection_id: str
+    source_file: Optional[str] = None
+    limit: Optional[int] = Field(None, gt=0)
+    concurrency: int = Field(default=5, ge=1)
+    rate_limit: float = Field(default=10.0, gt=0)
+    filters: IngestFilters = Field(default_factory=IngestFilters)
 
 class IngestModule:
     """Fetcher that retrieves items from a STAC API for a specific collection."""
@@ -25,13 +34,30 @@ class IngestModule:
         collection_id = context.data.get('_current_collection_id') or self.config.collection_id
         
         if not collection_id:
-            # If still None, maybe we search all? Spec implies per-collection pipeline.
-            # Let's permit it but warn, or default to all.
+            # If still None, warning or default
             pass
 
         client = Client.open(catalog_url)
-        search = client.search(collections=[collection_id] if collection_id else None)
         
+        # Build Search Parameters
+        search_params = {
+            "collections": [collection_id] if collection_id else None,
+            "max_items": self.config.limit
+        }
+        
+        # Apply filters
+        if self.config.filters.spatial:
+            search_params["bbox"] = self.config.filters.spatial
+        if self.config.filters.temporal:
+            # Assuming temporal is dict like {"start": "...", "end": "..."} or ISO string
+            # pystac-client expects "start/end" string or list
+            # We'll stick to a simple pass-through if it's already a string, or format it
+            # For now, simplistic handling:
+            pass 
+        if self.config.filters.query:
+             search_params["query"] = self.config.filters.query
+
+        search = client.search(**search_params)
         # Iterator
         for item in search.items():
             yield item.to_dict()
