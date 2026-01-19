@@ -27,22 +27,25 @@ class OutputModule:
         
     async def bundle(self, item: dict, context: WorkflowContext) -> None:
         if self.config.format == 'json':
-            self._write_json_item(item)
+            self._write_json_item(item, context)
         else:
             self._buffer.append(item)
             # Flush if buffer full (simple logic for now)
 
-    def _write_json_item(self, item: dict):
+    def _write_json_item(self, item: dict, context: WorkflowContext):
         filename = f"{item.get('id', 'unknown')}.json"
         path = os.path.join(self.config.output_path, filename)
+        context.logger.debug(f"Writing item to {path}")
         with open(path, "w") as f:
             json.dump(item, f)
         self._files_written.append(path)
 
     async def finalize(self, context: WorkflowContext) -> OutputResult:
+        context.logger.info(f"Finalizing output. Total files written: {len(self._files_written)}")
         # Flush remaining buffer (parquet)
         if self.config.format == 'parquet' and self._buffer:
             # Placeholder for parquet writing using stac-geoparquet or pandas
+             context.logger.warning("Parquet output not yet implemented")
              pass
             
         manifest_path = os.path.join(self.config.output_path, "manifest.json")
@@ -50,6 +53,7 @@ class OutputModule:
             "files": self._files_written,
             "total": len(self._files_written)
         }
+        context.logger.debug(f"Writing manifest to {manifest_path}")
         with open(manifest_path, "w") as f:
             json.dump(manifest, f)
             
