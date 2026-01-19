@@ -24,12 +24,14 @@ class ExtensionModule:
         # if not defined.
     
     def modify(self, item: dict, context: WorkflowContext) -> dict | None:
+        context.logger.debug(f"Applying extension {self.config.extension}")
         # 1. Convert to PySTAC
         try:
             stac_item = pystac.Item.from_dict(item)
-        except Exception:
+        except Exception as e:
             # If conversion fails, drop or log failure. 
             # For robustness, we assume valid dicts from upstream or return None
+            context.logger.error(f"Extension module failed to parse item: {e}", exc_info=True)
             return None
             
         # 2. Apply Logic (Placeholder for real dynamic loading)
