@@ -19,10 +19,13 @@ class DiscoveryModule:
         self.config = DiscoveryConfig(**config)
         
     async def fetch(self, context: WorkflowContext) -> AsyncIterator[dict]:
+        context.logger.debug(f"Discovery Config: {self.config}")
         # Store catalog_url/client info for downstream modules
         # This fulfills the "Side Effects" contract
         context.data['catalog_url'] = str(self.config.catalog_url)
         context.data['discovery_filters'] = self.config.filters.model_dump(exclude_none=True)
+        if self.config.filters.temporal:
+            context.logger.debug(f"Applied temporal filter configuration: {self.config.filters.temporal}")
         
         # Note: In real sync implementation, block fetching might block the loop 
         # unless moved to executor, but pystac-client is sync.
@@ -31,10 +34,15 @@ class DiscoveryModule:
         # Ideally we wrap this. For simplicity here, we assume sync call is fast enough for discovery.
         
         client = Client.open(str(self.config.catalog_url))
-        collections = client.get_collections()
+        collections = client.get_collection()
         
+        count = 0
         for collection in collections:
+            context.logger.debug(f"Scanning collection {collection.id}")
             if self.config.collection_ids:
                 if collection.id not in self.config.collection_ids:
                     continue
+            count += 1
             yield collection.to_dict()
+            
+        context.logger.info(f"Total collections found: {count}")
