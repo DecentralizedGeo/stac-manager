@@ -19,9 +19,11 @@ def test_substitute_env_vars_missing():
 def test_setup_logger(tmp_path):
     log_file = tmp_path / "test.log"
     config = {
-        "logging": {
-            "level": "DEBUG",
-            "file": str(log_file)
+        "settings": {
+            "logging": {
+                "level": "DEBUG",
+                "file": str(log_file)
+            }
         }
     }
     logger = setup_logger(config)
