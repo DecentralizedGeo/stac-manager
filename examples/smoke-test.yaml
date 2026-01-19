@@ -3,7 +3,8 @@ description: "Comprehensive Smoke Test: All Modules"
 
 settings:
   logging:
-    level: INFO
+    level: "debug"
+    output_format: "text"
 
 steps:
   # 1. Discover
@@ -19,6 +20,7 @@ steps:
     depends_on: ["discover"]
     config:
       limit: 3
+      # collection_id: "HLSS30_2.0" 
   
   # 3. Transform (Raw -> Intermediate)
   - id: transform
