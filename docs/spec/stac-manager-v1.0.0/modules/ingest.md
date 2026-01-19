@@ -17,7 +17,7 @@ Fetching data from APIs at scale requires careful resource management.
 
 ### 2.1 ItemFetcher
 - **Responsibility**: High-throughput data fetching.
-- **Context**: Leverages the pre-validated `ItemSearch` setup provided by the upstream **Discovery** step (via `WorkflowContext`).
+- **Context**: Consumes **Task Contexts** (containing `ItemSearch` objects) yielded by the Discovery module.
 - **Strategy**: **Native Async Search** (Strategy B).
   - Use `aiohttp` for raw JSON fetching (non-blocking I/O).
   - Use `pystac` only for parsing (CPU-bound).
@@ -131,16 +131,20 @@ class IngestConfig(BaseModel):
 
 ## 4. I/O Contract
 
-**Input (Workflow Context)**:
-- `collection_id` from config (required).
-- `context.data['item_search']` (or equivalent per-collection key): The base `ItemSearch` configuration object or parameters provided by the Discovery step (Required for API mode).
+- stream of **Task Contexts** (from Discovery): 
+  ```json
+  {
+     "type": "collection_search",
+     "collection_id": "...",
+     "search_object": <pystac_client.ItemSearch>
+  }
+  ```
 
 **Output (Python)**:
 ```python
 AsyncIterator[dict]  # Yields raw STAC Item dictionaries
 ```
-> [!IMPORTANT]
-> **Streaming Requirement**: This module yields items one-by-one or in small batches. It MUST NOT accumulate the entire result set in memory.
+> **Streaming Requirement**: This module yields items one-by-one or in small batches using `search_object.items_as_dicts()`. It MUST NOT accumulate the entire result set in memory.
 
 ## 5. Error Handling
 - **Fetch Failure (Single Page/Item)**: Log error to `FailureCollector`, skip, and continue.

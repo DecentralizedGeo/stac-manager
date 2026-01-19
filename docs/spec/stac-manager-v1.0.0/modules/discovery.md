@@ -9,8 +9,9 @@
 The Discovery Module is responsible for querying STAC API endpoints to find available Collections and their metadata. It acts as the primary **entry point** for most API-based workflows.
 
 It manages the process of establishing a valid `pystac_client` connection by:
-1.  **Verifying Existence**: Calls `client.get_collection("your-collection-id")` to confirm the collection exists. If no collection is returned, the module fails fast, preventing invalid workflows.
-2.  **Preparing Search**: If valid, it initializes the context for an `ItemSearch` object (via `client.search(collection=collection)`), which is the key component required by the downstream [Ingest Module](./ingest.md) to fetch items.
+1.  **Verifying Existence**: Calls `client.get_collection("your-collection-id")` to confirm the collection exists.
+2.  **Creating Search Tasks**: If valid, it constructs a complete `pystac_client.Search` object (initially configured with those collection parameters and any filters) and packages it into a **Task Context**.
+3.  **Handoff**: It yields these "Search Tasks" to effectively "queue up" work for the downstream Ingest module.
 
 ## 2. Architecture
 - **Role**: `Fetcher` (Source).
@@ -57,11 +58,17 @@ class DiscoveryConfig(BaseModel):
 - None (First step trigger) or previous step data (ignored).
 
 **Side Effects (Workflow Context)**:
-- Populates `context.data['item_search']` (or specific collection keys) with the verified `Collection` object or `ItemSearch` configuration parameters needed by the Ingest module.
+- Populates `context.data['catalog_url']` and `context.data['discovery_filters']` for downstream reference.
 
 **Output (Python)**:
 ```python
-AsyncIterator[dict]  # Yields STAC Collections as dictionaries to trigger the Orchestrator's parallel pipeline
+AsyncIterator[dict] 
+# Yields "Task Contexts" to the pipeline:
+# {
+#    "type": "collection_search",
+#    "collection_id": "...", 
+#    "search_object": pystac_client.ItemSearch(...)
+# }
 ```
 
 ## 5. Error Handling
