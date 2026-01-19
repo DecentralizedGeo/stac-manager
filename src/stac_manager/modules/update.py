@@ -13,7 +13,9 @@ class UpdateModule:
         self.config = UpdateConfig(**config)
         
     def modify(self, item: dict, context: WorkflowContext) -> dict:
+        context.logger.debug(f"Updating item {item.get('id')} with {len(self.config.updates)} changes")
         for path, value in self.config.updates.items():
+            context.logger.debug(f"Applying update {path} -> {value}")
             self._apply_update(item, path.split('.'), value)
         return item
         
