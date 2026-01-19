@@ -24,6 +24,8 @@ class IngestModule:
         self.config = IngestConfig(**config)
     
     async def fetch(self, context: WorkflowContext) -> AsyncIterator[dict]:
+        context.logger.info(f"Ingesting with config: {self.config}")
+        
         # 1. Resolve Catalog URL
         catalog_url = context.data.get('catalog_url')
         if not catalog_url:
@@ -33,9 +35,10 @@ class IngestModule:
         # Priority: context (from parallel orchestrator) > config > error
         collection_id = context.data.get('_current_collection_id') or self.config.collection_id
         
-        if not collection_id:
-            # If still None, warning or default
-            pass
+        if collection_id:
+            context.logger.info(f"Ingesting from collection: {collection_id}")
+        else:
+            context.logger.warning("No collection_id resolved for IngestModule")
 
         client = Client.open(catalog_url)
         
@@ -44,6 +47,8 @@ class IngestModule:
             "collections": [collection_id] if collection_id else None,
             "max_items": self.config.limit
         }
+        
+        context.logger.debug(f"Search parameters: {search_params}")
         
         # Apply filters
         if self.config.filters.spatial:
@@ -58,6 +63,12 @@ class IngestModule:
              search_params["query"] = self.config.filters.query
 
         search = client.search(**search_params)
+        
         # Iterator
+        count = 0
         for item in search.items():
+            context.logger.debug(f"Yielding item {item.id}")
+            count += 1
             yield item.to_dict()
+            
+        context.logger.info(f"Ingest complete. Total items fetched: {count}")
