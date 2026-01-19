@@ -1,10 +1,17 @@
 from typing import List, Optional, Literal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 class LoggingConfig(BaseModel):
     level: Literal['DEBUG', 'INFO', 'WARNING', 'ERROR'] = 'INFO'
     file: Optional[str] = None
-    format: Literal['json', 'text'] = 'text'
+    output_format: Literal['json', 'text'] = 'text'
+
+    @field_validator('level', mode='before')
+    @classmethod
+    def normalize_level(cls, v):
+        if isinstance(v, str):
+            return v.upper()
+        return v
 
 class DefaultConcurrencyConfig(BaseModel):
     concurrency: int = Field(default=5, ge=1)

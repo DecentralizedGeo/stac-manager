@@ -19,3 +19,18 @@ def test_workflow_validation():
 def test_missing_steps():
     with pytest.raises(ValueError):
         WorkflowDefinition(name="bad")
+
+def test_logging_config_normalization():
+    data = {
+        "name": "test-logging",
+        "settings": {
+            "logging": {
+                "level": "debug",  # Should be normalized to DEBUG
+                "output_format": "json"
+            }
+        },
+        "steps": []
+    }
+    wf = WorkflowDefinition(**data)
+    assert wf.settings.logging.level == "DEBUG"
+    assert wf.settings.logging.output_format == "json"
