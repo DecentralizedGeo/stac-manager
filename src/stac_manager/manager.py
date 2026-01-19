@@ -1,5 +1,7 @@
+
 import asyncio
 import logging
+import inspect
 from typing import Dict, Any, List
 
 from stac_manager.config import WorkflowDefinition
@@ -8,6 +10,7 @@ from stac_manager.failures import FailureCollector
 from stac_manager.registry import get_module_class
 from stac_manager.graph import build_execution_levels
 from stac_manager.exceptions import ModuleException
+from stac_manager.log_utils import monitor_async_generator
 
 class StacManager:
     def __init__(self, config: WorkflowDefinition):
@@ -32,66 +35,81 @@ class StacManager:
             self.instances[step.id] = cls(step.config)
             
     async def _execute_step(self, step_id: str):
-        instance = self.instances[step_id]
-        
-        # Determine Input
-        step_def = next(s for s in self.config.steps if s.id == step_id)
-        input_data = None
-        if step_def.depends_on:
-            # Assumption: Single linear dependency for stream, or merged? 
-            # Spec says "stream_tee" for branching, but here let's assume simple linear for now.
-            parent_id = step_def.depends_on[0]
-            input_data = self.context.data.get(parent_id)
-        
-        # Execute based on role
-        if hasattr(instance, 'fetch'):
-            # Fetchers typically start the stream or take context input
-            gen = instance.fetch(self.context)
-            # Materialize results to ensure side-effects (like context updates) occur
-            # and to allow simple downstream dependency handling for v1.0.0
-            result = [item async for item in gen]
-            print(f"Fetched {result.__len__()} items")
-        elif hasattr(instance, 'modify'):
-            # Manual pipe since modifiers are sync
-            # Assumes input_data is an AsyncIterator or iterable (list)
-            async def pipe(source):
-                if not source:
-                    return # Or empty stream
-                    
-                # Handle list (materialized upstream) vs AsyncIterator (streamed upstream)
-                if isinstance(source, list):
-                    for item in source:
-                        res = instance.modify(item, self.context)
-                        if res:
-                            yield res
-                else:
-                    async for item in source:
-                        res = instance.modify(item, self.context)
-                        if res:
-                            yield res
-                            
-            result = pipe(input_data)
-        elif hasattr(instance, 'bundle'):
-            # Bundlers consume the stream
-            if input_data:
-                # If input_data is a list (materialized from fetch), iterate it
-                if isinstance(input_data, list):
-                    for item in input_data:
-                        await instance.bundle(item, self.context)
-                else:
-                    async for item in input_data:
-                        await instance.bundle(item, self.context)
-            result = await instance.finalize(self.context)
-        else:
-            raise ModuleException(f"Module {step_id} has no valid role method (fetch, modify, bundle)")
-        self.context.data[step_id] = result
+        try:
+            instance = self.instances[step_id]
+            
+            # Determine Input
+            step_def = next(s for s in self.config.steps if s.id == step_id)
+            input_data = None
+            if step_def.depends_on:
+                # Assumption: Single linear dependency for stream, or merged? 
+                # Spec says "stream_tee" for branching, but here let's assume simple linear for now.
+                parent_id = step_def.depends_on[0]
+                input_data = self.context.data.get(parent_id)
+            
+            # Execute based on role
+            if hasattr(instance, 'fetch'):
+                # Fetchers typically start the stream or take context input
+                gen = instance.fetch(self.context)
+                # Materialize results to ensure side-effects (like context updates) occur
+                # and to allow simple downstream dependency handling for v1.0.0
+                result = [item async for item in gen]
+                self.context.logger.info(f"[{step_id}] Fetched {len(result)} items")
+            elif hasattr(instance, 'modify'):
+                # Manual pipe since modifiers are sync
+                # Assumes input_data is an AsyncIterator or iterable (list)
+                async def apply_modify(source):
+                    if not source:
+                        return 
+                        
+                    # Handle list (materialized upstream) vs AsyncIterator (streamed upstream)
+                    if isinstance(source, list):
+                        for item in source:
+                            res = instance.modify(item, self.context)
+                            if res:
+                                yield res
+                    else:
+                        async for item in source:
+                            res = instance.modify(item, self.context)
+                            if res:
+                                yield res
+                                
+                # Wrap with logging monitor
+                result = monitor_async_generator(
+                    apply_modify(input_data), 
+                    self.context.logger, 
+                    step_id
+                )
+            elif hasattr(instance, 'bundle'):
+                # Bundlers consume the stream
+                if input_data:
+                    # If input_data is a list (materialized from fetch), iterate it
+                    if isinstance(input_data, list):
+                        for item in input_data:
+                            await instance.bundle(item, self.context)
+                    else:
+                        async for item in input_data:
+                            await instance.bundle(item, self.context)
+                result = await instance.finalize(self.context)
+            else:
+                raise ModuleException(f"Module {step_id} has no valid role method (fetch, modify, bundle)")
+            self.context.data[step_id] = result
+            self.context.logger.debug(f"[{step_id}] Result type: {type(result)}")
+            
+            if inspect.isasyncgen(result):
+                self.context.logger.info(f"[{step_id}] Pipeline initialized (lazy)")
+            else:
+                self.context.logger.info(f"[{step_id}] Completed")
+        except Exception as e:
+            self.context.logger.error(f"[{step_id}] Failed: {str(e)}", exc_info=True)
+            raise
 
     async def execute(self):
         self._instantiate_modules()
         levels = build_execution_levels(self.config.steps)
         
         for level in levels:
-            self.context.logger.info(f"Executing Level: {level}")
+            self.context.logger.info(f"Executing step: {level}")
             tasks = [self._execute_step(step_id) for step_id in level]
             await asyncio.gather(*tasks)
             
