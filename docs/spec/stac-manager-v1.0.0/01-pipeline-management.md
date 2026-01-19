@@ -413,7 +413,11 @@ async def _execute_step(step_id: str, context: WorkflowContext):
     # 2. Execute based on Role
     if hasattr(instance, 'fetch'):
         # Role: Fetcher (Source)
-        result = await instance.fetch(context)
+        # 1.1 Check if fetcher accepts input (Handoff pattern)
+        if _accepts_input(instance.fetch) and input_data is not None:
+             result = instance.fetch(context, items=input_data)
+        else:
+             result = instance.fetch(context)
         
     elif hasattr(instance, 'modify'):
         # Role: Modifier (Processor)
