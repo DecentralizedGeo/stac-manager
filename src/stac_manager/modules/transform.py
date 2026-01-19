@@ -26,6 +26,7 @@ class TransformModule:
         ]
     
     def modify(self, item: dict, context: WorkflowContext) -> dict | None:
+        context.logger.debug(f"Transforming item with config {self.config.strategy}")
         if self.config.strategy == 'merge':
             import copy
             result = copy.deepcopy(item)
@@ -40,10 +41,12 @@ class TransformModule:
             if value is None:
                 if rule.required:
                     # Log failure in context (omitted for brevity)
+                    context.logger.warning(f"Required field {rule.source_field} missing in item")
                     return None
                 continue
             
             # Simple assignment logic
+            context.logger.debug(f"Applied rule {rule.source_field} -> {rule.target_field}")
             self._set_nested(result, rule.target_field, value)
             
         return result
