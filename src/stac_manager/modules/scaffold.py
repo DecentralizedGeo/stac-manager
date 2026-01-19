@@ -30,6 +30,7 @@ class ScaffoldModule:
     def modify(self, item: dict, context: WorkflowContext) -> dict | None:
         if self.config.mode != 'items':
             # TODO: Implement collection/catalog generation mode
+            context.logger.warning(f"Scaffold mode {self.config.mode} not supported yet")
             return None
 
         # 1. Create PySTAC Item
@@ -42,6 +43,7 @@ class ScaffoldModule:
             
             if not oid or not geom:
                 # Log failure
+                context.logger.warning(f"Scaffold failed: Missing id or geometry for item {oid}")
                 return None
                 
             # Parse datetime if string
@@ -53,7 +55,10 @@ class ScaffoldModule:
                     dt = dt_str
             
             if not dt:
+                 context.logger.warning(f"Scaffold failed: Missing datetime for item {oid}")
                  return None
+
+            context.logger.debug(f"Scaffolding item {oid} with geom type {type(geom)}")
 
             pystac_item = pystac.Item(
                 id=oid,
@@ -76,5 +81,6 @@ class ScaffoldModule:
             return pystac_item.to_dict()
             
         except Exception as e:
+            context.logger.error(f"Scaffold unexpected error for item {item.get('id')}: {e}", exc_info=True)
             # context.failure_collector.add(item.get('id', 'unknown'), str(e), step_id='scaffold')
             return None
