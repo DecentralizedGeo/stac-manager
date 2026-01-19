@@ -19,6 +19,7 @@ class ValidateModule:
         # Note: stac-validator API might differ slightly by version, 
         # but usage generally involves instantiating and calling validate_dict or similar.
         # Based on v3.3.0:
+        context.logger.debug(f"Validating item {item.get('id')}")
         is_valid = self.validator.validate_dict(item)
         
         if is_valid:
@@ -26,7 +27,7 @@ class ValidateModule:
         else:
             # Log failure
             msg = getattr(self.validator, 'message', "Validation failed")
-            print(f"Validation failed for item {item.get('id')}: {msg}. Strict: {self.config.strict}")
+            context.logger.warning(f"Validation failed for item {item.get('id')}: {msg}. Strict: {self.config.strict}")
             context.failure_collector.add(item.get('id', 'unknown'), str(msg), step_id='validate')
             
             if self.config.strict:
