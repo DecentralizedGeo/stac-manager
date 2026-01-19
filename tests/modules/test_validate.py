@@ -5,6 +5,8 @@ from unittest.mock import MagicMock, patch
 def test_validate_valid_item():
     module = ValidateModule({"strict": True})
     ctx = MagicMock(spec=WorkflowContext)
+    ctx.logger = MagicMock()
+    ctx.data = {}
     
     valid_item = {
         "id": "test",

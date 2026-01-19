@@ -11,6 +11,7 @@ def test_transform_simple():
     }
     module = TransformModule(config)
     ctx = MagicMock(spec=WorkflowContext)
+    ctx.logger = MagicMock()
     
     item = {"foo": "item-1", "meta": {"dt": "2024-01-01"}}
     result = module.modify(item, ctx)

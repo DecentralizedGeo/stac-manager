@@ -12,6 +12,8 @@ def test_update_item_field():
     }
     module = UpdateModule(config)
     ctx = MagicMock(spec=WorkflowContext)
+    ctx.logger = MagicMock()
+    ctx.data = {}
     
     item = {
         "id": "1",

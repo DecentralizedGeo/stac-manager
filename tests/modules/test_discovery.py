@@ -20,6 +20,7 @@ async def test_discovery_fetch():
         mock_client_instance.get_collections.return_value = [mock_coll]
         
         ctx = MagicMock(spec=WorkflowContext)
+        ctx.logger = MagicMock()
         ctx.data = {}
         
         items = []

@@ -16,6 +16,7 @@ async def test_output_json_writer(tmp_path):
     }
     module = OutputModule(config)
     ctx = MagicMock(spec=WorkflowContext)
+    ctx.logger = MagicMock()
     
     item = {"id": "item1", "type": "Feature", "properties": {}}
     await module.bundle(item, ctx)

@@ -19,7 +19,8 @@ def test_apply_extension():
     # Let's simple check that modify converts dict->Item->dict
     module = ExtensionModule(config)
     ctx = MagicMock(spec=WorkflowContext)
-    
+    ctx.logger = MagicMock()
+    # Mock extension loading (not implemented yet) 
     item_dict = {
         "id": "test",
         "type": "Feature",

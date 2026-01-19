@@ -13,8 +13,8 @@ def test_scaffold_item_creation():
     }
     module = ScaffoldModule(config)
     ctx = MagicMock(spec=WorkflowContext)
-    
-    # Input data (e.g. from Transform)
+    ctx.logger = MagicMock()
+    ctx.data = {}  # Input data (e.g. from Transform)
     input_data = {
         "id": "item-1",
         "properties": {"datetime": "2024-01-01T00:00:00Z"},

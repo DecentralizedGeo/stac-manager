@@ -12,6 +12,7 @@ async def test_ingest_fetch():
     module = IngestModule(config)
     
     ctx = MagicMock(spec=WorkflowContext)
+    ctx.logger = MagicMock()
     ctx.data = {"catalog_url": "https://example.com"}
     
     with patch('stac_manager.modules.ingest.Client') as MockClient:
