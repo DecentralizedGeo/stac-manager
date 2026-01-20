@@ -1,0 +1,35 @@
+name: 05-local-update
+description: "Test Config 5: Update STAC metadata from local disk"
+
+settings:
+  logging:
+    level: "info"
+
+steps:
+  # 1. Load: Read valid STAC items from a local file (Hypothetical 'source_file' config)
+  - id: load
+    module: IngestModule
+    config:
+      # Concept: Point to a local file (ItemCollection or list of items)
+      # We will need to create this source file first or use an existing one.
+      # For this test, we might assume 'data/output/test_01_discovery_ingest/manifest.json' or similar exists?
+      # Or just a standalone json file.
+      source_file: "examples/test-configs/sample-items.json" 
+
+  # 2. Update: Apply metadata changes
+  - id: update
+    module: UpdateModule
+    depends_on: ["load"]
+    config:
+      mode: "merge"
+      updates:
+        "properties.updated_from_disk": true
+        "properties.processing_date": "2023-10-27"
+
+  # 3. Output
+  - id: output
+    module: OutputModule
+    depends_on: ["update"]
+    config:
+      format: "json"
+      output_path: "data/output/test_05_local_update"

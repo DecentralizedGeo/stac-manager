@@ -1,0 +1,72 @@
+name: 02-modifiers
+description: "Test Config 2: Focus on Modifiers (Transform, Scaffold, Update, Validate)"
+
+settings:
+  logging:
+    level: "debug"
+
+steps:
+  # 1. Discover
+  - id: discover
+    module: DiscoveryModule
+    config:
+      catalog_url: "https://stac.easierdata.info/"
+      collection_ids: ["HLSS30_2.0"]
+
+  # 2. Ingest
+  - id: ingest
+    module: IngestModule
+    depends_on: ["discover"]
+    config:
+      limit: 2
+
+  # 3. Transform: Rename and Add fields
+  - id: transform
+    module: TransformModule
+    depends_on: ["ingest"]
+    config:
+      strategy: "merge"
+      mappings:
+        - source_field: "id"
+          target_field: "properties.original_id"
+          type: "string"
+        - source_field: "id" # transform id to something else to prove we can modify it? 
+          target_field: "id" # Keep id as is for now, maybe prefixing is too complex for simple mapping
+          type: "string"
+
+  # 4. Scaffold: Ensure structure
+  - id: scaffold
+    module: ScaffoldModule
+    depends_on: ["transform"]
+    config:
+      mode: "items"
+      defaults:
+        license: "MIT"
+        geometry: 
+           type: "Polygon"
+           coordinates: [[[-180, -90], [180, -90], [180, 90], [-180, 90], [-180, -90]]]
+
+  # 5. Update: Deep merge update
+  - id: update
+    module: UpdateModule
+    depends_on: ["scaffold"]
+    config:
+      mode: "merge"
+      updates:
+        "properties.test_run": true
+        "properties.modifier_check": "passed"
+
+  # 6. Validate: Strict mode
+  - id: validate
+    module: ValidateModule
+    depends_on: ["update"]
+    config:
+      strict: true
+
+  # 7. Output
+  - id: output
+    module: OutputModule
+    depends_on: ["validate"]
+    config:
+      format: "json"
+      output_path: "data/output/test_02_modifiers"
