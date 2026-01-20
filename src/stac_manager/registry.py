@@ -11,6 +11,7 @@ MODULE_REGISTRY = {
     'ValidateModule': 'stac_manager.modules.validate.ValidateModule',
     'UpdateModule': 'stac_manager.modules.update.UpdateModule',
     'OutputModule': 'stac_manager.modules.output.OutputModule',
+    'StaticSourceModule': 'stac_manager.modules.static_source.StaticSourceModule',
 }
 
 def get_module_class(module_name: str) -> Type[Any]:
