@@ -4,7 +4,7 @@ import yaml
 import sys
 from stac_manager.config import WorkflowDefinition
 from stac_manager.manager import StacManager
-from stac_manager.log_utils import setup_logger
+from stac_manager.log_utils import setup_logger, LogRunContext
 from stac_manager.utils import substitute_env_vars, validate_workflow_config, generate_processing_summary
 
 @click.group()
@@ -41,7 +41,10 @@ def run(config_path):
     manager = StacManager(wf_def)
     
     click.echo(f"Starting workflow: {wf_def.name}")
-    result = asyncio.run(manager.execute())
+    
+    # Wrap execution with header/footer logging
+    with LogRunContext(manager.context.logger, wf_def.name, config_path):
+        result = asyncio.run(manager.execute())
     
     # 5. Generate Summary
     try:

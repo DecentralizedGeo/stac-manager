@@ -2,6 +2,8 @@
 import logging
 import sys
 import json
+import time
+from datetime import datetime
 from pathlib import Path
 from logging.handlers import RotatingFileHandler
 from typing import Any, AsyncIterator
@@ -85,3 +87,58 @@ async def monitor_async_generator(source: AsyncIterator[Any], logger: logging.Lo
             yield item
     finally:
         logger.info(f"[{step_id}] Pipeline finished (yielded {count} items)")
+
+class LogRunContext:
+    def __init__(self, logger: logging.Logger, workflow_name: str, config_path: str = None):
+        self.logger = logger
+        self.workflow_name = workflow_name
+        self.config_path = config_path
+        self.start_time = None
+
+    def __enter__(self):
+        self.start_time = time.time()
+        start_dt = datetime.fromtimestamp(self.start_time).strftime('%d/%m/%y %H:%M:%S')
+        
+        separator = "|---------------------------------------------------------"
+        msg = [
+            separator,
+            f"|   Start-time: {start_dt} | Workflow: {self.workflow_name}",
+        ]
+        if self.config_path:
+            msg.append(f"|   Config: {self.config_path}")
+        msg.append(separator)
+        
+        # Log as a single block (or iterated lines)
+        # Using a single call with newlines might mess up some formatters (like JSON),
+        # but for text logs it looks good. Let's log line by line to be safe and clear.
+        for line in msg:
+            self.logger.info(line)
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        end_time = time.time()
+        duration = end_time - self.start_time
+        end_dt = datetime.fromtimestamp(end_time).strftime('%d/%m/%y %H:%M:%S')
+        
+        # Format Duration
+        if duration < 60:
+            duration_str = f"{duration:.2f}s"
+        elif duration < 3600:
+            minutes = int(duration // 60)
+            seconds = int(duration % 60)
+            duration_str = f"{minutes}m {seconds}s"
+        else:
+            hours = int(duration // 3600)
+            minutes = int((duration % 3600) // 60)
+            seconds = int(duration % 60)
+            duration_str = f"{hours}h {minutes}m {seconds}s"
+
+        separator = "|---------------------------------------------------------"
+        msg = [
+            separator,
+            f"|   End-time: {end_dt} | Runtime: {duration_str}",
+            separator
+        ]
+        
+        for line in msg:
+            self.logger.info(line)
