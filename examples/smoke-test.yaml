@@ -12,14 +12,14 @@ steps:
     module: DiscoveryModule
     config:
       catalog_url: "https://stac.easierdata.info/"
-      collection_ids: ["HLSS30_2.0"]
+      collection_ids: ["HLSS30_2.0", "landsat-c2l1"]
 
   # 2. Ingest (Limit 3)
   - id: ingest
     module: IngestModule
     depends_on: ["discover"]
     config:
-      limit: 3
+      limit: 5
       # collection_id: "HLSS30_2.0" 
   
   # 3. Transform (Raw -> Intermediate)
