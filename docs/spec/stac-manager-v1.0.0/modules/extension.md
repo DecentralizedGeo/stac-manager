@@ -21,6 +21,25 @@ The module follows a registry-based strategy to allow both strict built-ins and 
 ### 2.2 ExtensionLoader
 - **Responsibility**: Dynamically imports Python modules and verifies they implement the `Extension` Protocol.
 - **Caching**: Caches loaded extension classes for performance.
+- **Logic (Pseudocode)**:
+  ```python
+  def load_extension(self, name_or_path: str) -> Type[Extension]:
+      if name_or_path in self._cache:
+          return self._cache[name_or_path]
+          
+      if name_or_path in BUILTINS:
+          module = import_module(BUILTINS[name_or_path])
+      else:
+          module = import_module(name_or_path)
+          
+      # Verify Protocol compliance
+      ext_class = getattr(module, "CustomExtension", None)
+      if irrelevant_checks(ext_class): 
+           raise ValueError("Invalid Extension")
+           
+      self._cache[name_or_path] = ext_class
+      return ext_class
+  ```
 
 ### 2.3 ExtensionApplicator
 - **Responsibility**: The worker that actually modifies the item.
@@ -36,6 +55,27 @@ The `ExtensionModule` implements the synchronous `Modifier` protocol:
 - **Apply**: Applies the plugin's `Extension.apply()` logic.
 - **Output**: Returns the object back to the pipe via `item.to_dict()`.
 
+### 2.5 Generic Extension Strategy
+To support ad-hoc property injection without writing a custom Python class:
+- **Trigger**: When `extension` is set to "generic" (or implied if `properties` are present).
+- **Behavior (Pseudocode)**:
+
+```python
+def _apply_generic(self, item: dict) -> dict:
+    # 1. Append Schema URI
+    if self.config.schema_uri:
+        schemas = item.setdefault("stac_extensions", [])
+        if self.config.schema_uri not in schemas:
+            schemas.append(self.config.schema_uri)
+
+    # 2. Merge Properties (Shallow Update)
+    if self.config.properties:
+        props = item.setdefault("properties", {})
+        props.update(self.config.properties) # Overwrites existing keys
+        
+    return item
+```
+
 ## 3. Configuration Schema
 
 ```python
@@ -43,8 +83,10 @@ from pydantic import BaseModel, Field
 from typing import Dict, Any
 
 class ExtensionConfig(BaseModel):
-    extension: str # Built-in name OR python path
+    extension: str # Built-in name, python path, or "generic"
     config: Dict[str, Any] = Field(default_factory=dict) # Extension-specific config
+    schema_uri: Optional[str] = None # For "generic" mode
+    properties: Dict[str, Any] = None # For "generic" mode; merges into item properties
     validate: bool = False # Whether to run validation after application
 ```
 
