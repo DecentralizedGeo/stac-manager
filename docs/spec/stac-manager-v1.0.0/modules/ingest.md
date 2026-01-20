@@ -19,9 +19,9 @@ Fetching data from APIs at scale requires careful resource management.
 - **Responsibility**: High-throughput data fetching.
 - **Context**: Consumes **Task Contexts** (containing `ItemSearch` objects) yielded by the Discovery module.
 - **Strategy**: **Native Async Search** (Strategy B).
-  - Use `aiohttp` for raw JSON fetching (non-blocking I/O).
+  - Use **Non-blocking HTTP Client** (e.g., `aiohttp`) for raw JSON fetching (non-blocking I/O).
   - Use `pystac` only for parsing (CPU-bound).
-  - **Avoid**: `pystac_client.Client.search()` in the hot path (blocking).
+  - **Avoid**: Blocking calls (like `pystac_client.Client.search()`) in the hot path.
 
 ### 2.2 Hybrid Fetching Strategy
 To optimize both logic ("splitting") and throughput ("fetching"):
@@ -30,7 +30,7 @@ To optimize both logic ("splitting") and throughput ("fetching"):
     - Specifically checking `search(...).matched()` counts.
     - Used by `RequestSplitter` to verify if a range is safe to fetch.
     - Runs in `ThreadPoolExecutor` to avoid blocking the loop.
-2.  **Data Plane (Native Async)**: Use `aiohttp` for Item Pages.
+3.  **Data Plane (Native Async)**: Use **Non-blocking I/O** for Item Pages.
     - Once a time-range is deemed "safe" (count < limit), fetch it using native async.
     - Yields raw STAC Item **dictionaries** immediately to the pipeline.
 - **Responsibility**: Manages cursor/page tracking and query sharding.
@@ -71,10 +71,30 @@ class RequestSplitter:
 ### 2.4 FileFetcher (Parquet Cache Support)
 - **Responsibility**: Read items from a local file instead of an API.
 - **Trigger**: Active when `config.source_file` is set.
-- **Implementation**:
-  - **Parquet**: Uses `stac_geoparquet.to_item_collection` (or iterative read).
-  - **JSON**: Uses `pystac.ItemCollection.from_file`.
-  - **Yields**: Dictionaries (via `.to_dict()`) matching the pipeline wire format.
+### 2.4 FileFetcher (Parquet Cache Support)
+- **Responsibility**: Read items from a local file instead of an API.
+- **Trigger**: Active when `config.source_file` is set.
+- **Implementation (Pseudocode)**:
+
+```python
+def fetch_from_file(self, path: str) -> Iterator[dict]:
+    if path.endswith(".parquet"):
+        # Use simple stac-geoparquet reader
+        df = stac_geoparquet.read(path)
+        yield from df.to_dicts()
+    else:
+        # JSON / GeoJSON
+        with open(path) as f:
+            data = json.load(f)
+            
+        if isinstance(data, dict):
+            if data.get("type") == "FeatureCollection":
+                yield from data.get("features", [])
+            else:
+                yield data # Single item
+        elif isinstance(data, list):
+            yield from data
+```
 
 ## 3. Configuration Schema
 
