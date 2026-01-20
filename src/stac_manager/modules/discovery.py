@@ -18,31 +18,36 @@ class DiscoveryModule:
     def __init__(self, config: dict):
         self.config = DiscoveryConfig(**config)
         
-    async def fetch(self, context: WorkflowContext) -> AsyncIterator[dict]:
+    async def fetch(self, context: WorkflowContext) -> List[dict]:
         context.logger.debug(f"Discovery Config: {self.config}")
-        # Store catalog_url/client info for downstream modules
-        # This fulfills the "Side Effects" contract
+        
+        # Store context for downstream modules (side effect)
         context.data['catalog_url'] = str(self.config.catalog_url)
         context.data['discovery_filters'] = self.config.filters.model_dump(exclude_none=True)
-        if self.config.filters.temporal:
-            context.logger.debug(f"Applied temporal filter configuration: {self.config.filters.temporal}")
-        
-        # Note: In real sync implementation, block fetching might block the loop 
-        # unless moved to executor, but pystac-client is sync.
-        # For this phase, we run it directly or wrap in thread. 
-        # Spec says Fetchers are async. pystac-client is sync.
-        # Ideally we wrap this. For simplicity here, we assume sync call is fast enough for discovery.
         
         client = Client.open(str(self.config.catalog_url))
-        collections = client.get_collection()
         
-        count = 0
-        for collection in collections:
-            context.logger.debug(f"Scanning collection {collection.id}")
-            if self.config.collection_ids:
-                if collection.id not in self.config.collection_ids:
-                    continue
-            count += 1
-            yield collection.to_dict()
-            
-        context.logger.info(f"Total collections found: {count}")
+        tasks = []
+        if self.config.collection_ids:
+            for coll_id in self.config.collection_ids:
+                try:
+                    # 1. Verify existence
+                    collection = client.get_collection(coll_id)
+                    if not collection:
+                         context.logger.warning(f"Collection {coll_id} not found.")
+                         continue
+                    
+                    # 2. Add Collection Context (Task)
+                    tasks.append({
+                        "type": "collection",
+                        "collection_id": coll_id,
+                        "collection_obj": collection,
+                        "catalog_url": str(self.config.catalog_url)
+                    })
+                except Exception as e:
+                     context.logger.error(f"Error discovering collection {coll_id}: {e}")
+        else:
+             context.logger.warning("No collection_ids configured for Discovery.")
+             
+        context.logger.info(f"Discovery complete. Found {len(tasks)} collections.")
+        return tasks
