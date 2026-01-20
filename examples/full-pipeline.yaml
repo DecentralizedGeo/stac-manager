@@ -17,9 +17,6 @@ steps:
   - id: ingest
     module: IngestModule
     config:
-      # collection_id is optional call if context has it, but good practice to allow overrides
-      # here we rely on Discovery passing it, but IngestModule config requires it as fallback or primary
-      collection_id: "HLSS30_2.0" 
       limit: 5 # Keep it small for quick verification
       concurrency: 2
 
