@@ -49,12 +49,26 @@ class StacManager:
             
             # Execute based on role
             if hasattr(instance, 'fetch'):
-                # Fetchers typically start the stream or take context input
-                gen = instance.fetch(self.context)
-                # Materialize results to ensure side-effects (like context updates) occur
-                # and to allow simple downstream dependency handling for v1.0.0
-                result = [item async for item in gen]
-                self.context.logger.info(f"[{step_id}] Fetched {len(result)} items")
+                # Role: Fetcher (Source)
+                # Check if fetch accepts 'items' argument (Handoff Pattern)
+                sig = inspect.signature(instance.fetch)
+                if 'items' in sig.parameters and input_data is not None:
+                     # Pass input_data (which is the stream from upstream)
+                     result = instance.fetch(self.context, items=input_data)
+                else:
+                     result = instance.fetch(self.context)
+                
+                # Check if result is awaitable (Materialized List) or AsyncGenerator (Stream)
+                if inspect.isawaitable(result):
+                    result = await result
+                    self.context.logger.info(f"[{step_id}] Fetched {len(result)} items (Materialized)")
+                else:
+                    # Lazy Execution: Wrap with logging monitor
+                    result = monitor_async_generator(
+                        result,
+                        self.context.logger,
+                        step_id
+                    )
             elif hasattr(instance, 'modify'):
                 # Manual pipe since modifiers are sync
                 # Assumes input_data is an AsyncIterator or iterable (list)
