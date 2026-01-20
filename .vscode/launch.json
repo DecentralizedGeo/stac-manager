@@ -12,6 +12,15 @@
             "console": "integratedTerminal"
         },
         {
+            "name": "Python: Interactive Debug",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/debug_launcher.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {"PYTHONPATH": "${workspaceFolder}/src"}
+        },
+        {
             "name": "Python: Run Smoke Test (Script)",
             "type": "debugpy",
             "request": "launch",
