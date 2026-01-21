@@ -434,16 +434,16 @@ Create human-readable summary of workflow execution results
 
 ```python
 def generate_processing_summary(
-    workflow_result: dict,
-    failure_collector: FailureCollector
+    result: WorkflowResult, 
+    context: WorkflowContext
 ) -> str:
     """
-    Generate workflow execution summary report.
+    Generates a human-readable markdown summary of the workflow execution.
     
     Args:
-        workflow_result: Result dict from StacManager.execute()
-        failure_collector: FailureCollector with accumulated errors
-    
+        result: WorkflowResult dict
+        context: WorkflowContext object
+        
     Returns:
         Formatted summary string for console output
     
