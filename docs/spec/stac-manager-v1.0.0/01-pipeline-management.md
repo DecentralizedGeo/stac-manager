@@ -333,8 +333,7 @@ def build_dag(steps):
 **Workflow Configuration**:
 ```yaml
 steps:
-  - id: discover         # No dependencies
-  - id: ingest           # depends_on: [discover]
+  - id: ingest           # No dependencies
   - id: apply_dgeo       # depends_on: [ingest]
   - id: apply_eo         # depends_on: [ingest]
   - id: validate         # depends_on: [apply_dgeo, apply_eo]
@@ -344,11 +343,10 @@ steps:
 **DAG Output**:
 ```python
 [
-    ['discover'],              # Level 0: No dependencies
-    ['ingest'],                # Level 1: Depends on discover
-    ['apply_dgeo', 'apply_eo'],# Level 2: Both depend on ingest (parallel!)
-    ['validate'],              # Level 3: Depends on both extensions
-    ['output']                 # Level 4: Depends on validate
+    ['ingest'],                # Level 0: Ingest (Source)
+    ['apply_dgeo', 'apply_eo'],# Level 1: Both depend on ingest (parallel!)
+    ['validate'],              # Level 2: Depends on both extensions
+    ['output']                 # Level 3: Depends on validate
 ]
 ```
 
@@ -362,10 +360,9 @@ The orchestrator maintains a mapping of module class names to Python module path
 
 ```python
 MODULE_REGISTRY = {
-    'DiscoveryModule': 'stac_manager.modules.discovery.DiscoveryModule',
     'IngestModule': 'stac_manager.modules.ingest.IngestModule',
+    'SeedModule': 'stac_manager.modules.seed.SeedModule',
     'TransformModule': 'stac_manager.modules.transform.TransformModule',
-    'ScaffoldModule': 'stac_manager.modules.scaffold.ScaffoldModule',
     'ExtensionModule': 'stac_manager.modules.extension.ExtensionModule',
     'ValidateModule': 'stac_manager.modules.validate.ValidateModule',
     'UpdateModule': 'stac_manager.modules.update.UpdateModule',
@@ -381,7 +378,7 @@ def _import_module(module_class_name: str):
     Dynamically import and return module class.
     
     Args:
-        module_class_name: Class name from workflow YAML (e.g., 'DiscoveryModule')
+        module_class_name: Class name from workflow YAML (e.g., 'IngestModule')
     
     Returns:
         Module class (not instance)

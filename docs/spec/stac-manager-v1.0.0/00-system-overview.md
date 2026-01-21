@@ -21,8 +21,8 @@
 The STAC Manager is a **composable pipeline manager** built on the **Pipes and Filters** design pattern. The architecture follows these core principles:
 
 - **Modularity (Filters)**: Self-contained components with specialized roles:
-    - **Fetchers (Sources)**: Retrieve and originate item streams (Discovery, Ingest).
-    - **Modifiers (Processors)**: Transform or enrich items in-stream (Transform, Scaffold, etc.).
+    - **Fetchers (Sources)**: Retrieve and originate item streams (Ingest, Seed).
+    - **Modifiers (Processors)**: Transform or enrich items in-stream (Transform, etc.).
     - **Bundlers (Sinks)**: Finalize and aggregate processed items (Output).
 - **Role-Based Protocols**: Type-safe interfaces tailored to the component's behavior (`fetch()`, `modify()`, `bundle()`).
 - **Configuration-Driven**: Workflows defined in YAML, executed by a central manager.

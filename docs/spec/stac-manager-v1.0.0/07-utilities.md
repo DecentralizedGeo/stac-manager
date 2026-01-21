@@ -208,7 +208,7 @@ Run synchronous libraries (like `pystac-client`) in async workflows without bloc
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 
-class DiscoveryModule:
+class IngestModule:
     def __init__(self, config: dict):
         self.executor = ThreadPoolExecutor(max_workers=4)
         self.catalog_url = config['catalog_url']
@@ -218,20 +218,20 @@ class DiscoveryModule:
         loop = asyncio.get_event_loop()
         
         # Execute blocking function in thread pool
-        collections = await loop.run_in_executor(
+        pages = await loop.run_in_executor(
             self.executor,
-            self._discover_sync,  # Sync function
+            self._search_sync,  # Sync function
             self.catalog_url
         )
         
-        return collections
+        return pages
     
-    def _discover_sync(self, catalog_url: str) -> list:
-        """Synchronous discovery (runs in thread)."""
+    def _search_sync(self, catalog_url: str) -> list:
+        """Synchronous search (runs in thread)."""
         from pystac_client import Client
         
         client = Client.open(catalog_url)
-        return list(client.get_collections())
+        return list(client.search(max_items=100).items())
 ```
 
 ### 3.4 Pattern: Native Async Search (Strategy B)
@@ -331,7 +331,7 @@ def ensure_bbox(geometry: dict | None) -> list[float] | None:
 
 **Usage**:
 ```python
-# In ScaffoldModule
+# In SeedModule
 bbox = ensure_bbox(transformed_data['geometry'])
 ```
 

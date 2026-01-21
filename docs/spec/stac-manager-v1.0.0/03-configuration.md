@@ -137,7 +137,7 @@ The `StacManager` uses a factory pattern to instantiate modules based on the `st
 
 ### 4.1 Constructor Injection
 For each step in the `WorkflowDefinition`:
-1.  The `module` string is resolved to a class (e.g., `discovery.DiscoveryModule`).
+1.  The `module` string is resolved to a class (e.g., `ingest.IngestModule`).
 2.  The `config` dictionary is passed directly to the module's `__init__` method.
 
 ```python
@@ -177,17 +177,17 @@ def _instantiate_modules(self, workflow: WorkflowDefinition) -> dict[str, Module
 Each module validates its config in `__init__` using its own Pydantic model:
 
 ```python
-# Example: DiscoveryModule (Tier 2: Algorithmic Guidance)
+# Example: IngestModule (Tier 2: Algorithmic Guidance)
 from pydantic import BaseModel, HttpUrl
 
-class DiscoveryConfig(BaseModel):
+class IngestConfig(BaseModel):
     catalog_url: HttpUrl
     collection_ids: list[str] | None = None
 
-class DiscoveryModule:
+class IngestModule:
     def __init__(self, config: dict):
         # Pydantic validates and converts the raw dict
-        self.config = DiscoveryConfig(**config)
+        self.config = IngestConfig(**config)
     
     async def fetch(self, context: WorkflowContext) -> AsyncIterator[dict]:
         # Access validated config
@@ -199,17 +199,17 @@ class DiscoveryModule:
 
 Modules that need to share runtime data (not static config) use `context.data`.
 
-**Example**: Discovery stores `catalog_url` for downstream modules:
+**Example**: SeedModule stores collection_id for downstream modules:
 
 ```python
-# In DiscoveryModule.fetch()
+# In SeedModule.fetch()
 async def fetch(self, context: WorkflowContext) -> AsyncIterator[dict]:
-    # Store for downstream modules (e.g., IngestModule)
-    context.data['catalog_url'] = str(self.config.catalog_url)
+    # Store for downstream modules
+    if self.config.defaults and 'collection' in self.config.defaults:
+        context.data['collection_id'] = self.config.defaults['collection']
     
-    collections = await self._discover_collections()
-    for collection in collections:
-        yield collection.to_dict()
+    for item in items:
+        yield item
 ```
 
 **Example**: IngestModule reads `catalog_url` from context:
@@ -217,10 +217,10 @@ async def fetch(self, context: WorkflowContext) -> AsyncIterator[dict]:
 ```python
 # In IngestModule.fetch()
 async def fetch(self, context: WorkflowContext) -> AsyncIterator[dict]:
-    # Inherit catalog_url from Discovery step
-    catalog_url = context.data.get('catalog_url')
-    if not catalog_url:
-        raise ModuleException("IngestModule requires 'catalog_url' in context.data")
+    # Inherit collection_id from Matrix Strategy or Config
+    collection_id = context.data.get('collection_id')
+    if not collection_id and not self.config.collection_id:
+        raise ModuleException("IngestModule requires 'collection_id'")
     
     # Use inherited URL with module-specific collection_id
     async for item in self._fetch_items(catalog_url, self.config.collection_id):

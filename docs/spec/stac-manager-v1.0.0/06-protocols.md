@@ -121,10 +121,9 @@ class WorkflowContext:
 
 | Module | Role | Protocol Implementation |
 |:-------|:-----|:------------------------|
-| **DiscoveryModule** | Fetcher | `async def fetch(...) -> AsyncIterator[dict]` |
 | **IngestModule** | Fetcher | `async def fetch(...) -> AsyncIterator[dict]` |
+| **SeedModule** | Fetcher | `async def fetch(...) -> AsyncIterator[dict]` |
 | **TransformModule** | Modifier | `def modify(...) -> dict | None` |
-| **ScaffoldModule** | Modifier | `def modify(...) -> dict | None` |
 | **ExtensionModule** | Modifier | `def modify(...) -> dict | None` |
 | **ValidateModule** | Modifier | `def modify(...) -> dict | None` |
 | **UpdateModule** | Modifier | `def modify(...) -> dict | None` |
