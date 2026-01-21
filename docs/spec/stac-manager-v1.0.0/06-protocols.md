@@ -136,16 +136,17 @@ class WorkflowContext:
 - **Statelessness**: Components should not store mutable state that affects independent items (except for Bundlers managing buffers).
 - **Fetcher Concurrency**: Fetchers should use semaphores to honor concurrency limits.
 - **Modifier Simplicity**: Keep Modifiers sync for easier unit testing and implementation of business logic.
-- **Bundler Atomic Writes**: Bundlers should implement a crash-only design (write-then-rename).
 
-
+### 3.1 Bundler Atomic Writes
+ Bundlers should implement a crash-only design (write-then-rename).
+ 
 ---
+ 
+ ## 4. Extension Protocol
+ 
+ Custom STAC extensions **MUST** implement this protocol to be compatible with the ExtensionModule.
 
-## 2. Extension Protocol
-
-Custom STAC extensions **MUST** implement this protocol to be compatible with the ExtensionModule.
-
-### 2.1 Protocol Definition
+### 4.1 Protocol Definition
 
 ```python
 from typing import Protocol
@@ -211,7 +212,7 @@ class Extension(Protocol):
         ...
 ```
 
-### 2.2 Implementation Example
+### 4.2 Implementation Example
 
 ```python
 import pystac
@@ -262,7 +263,7 @@ class DgeoExtension:
         return is_valid, errors
 ```
 
-### 2.3 Extension Registration
+### 4.3 Extension Registration
 
 Extensions can be referenced in workflows by:
 
@@ -277,32 +278,46 @@ BUILTIN_EXTENSIONS = {
 }
 ```
 
-### 2.4 Key Requirements
+### 4.4 Key Requirements
 
 - **Schema URL**: Must be a publicly accessible JSON Schema
 - **Idempotent**: Calling `apply()` multiple times should be safe
 - **Immutability**: Don't modify `config`, only read from it
 - **Validation**: Use `stac-validator` library for schema checking
+ 
+ ### 4.5 Data Serialization
+ 
+ > [!IMPORTANT]
+ > Extensions operate on **Pystac Objects**, but the pipeline passes **Dictionaries**.
+ 
+ The `ExtensionModule` MUST:
+ 1. **Deserialize**: Convert the input `dict` to a `pystac.Item` (or `Collection`).
+ 2. **Apply**: Use the `Extension` class to modify the object.
+ 3. **Serialize**: Convert the modified `pystac` object back to a `dict` (using `to_dict()`) before returning.
+ 
+ ### 4.6 Resources
+ 
+ - [PySTAC Custom Extensions Tutorial](https://github.com/stac-utils/pystac/blob/main/docs/tutorials/adding-new-and-custom-extensions.ipynb)
 
 ---
 
-## 3. Data Transfer Objects
+## 5. Data Transfer Objects
 
 Data transfer objects used in the pipeline are defined centrally in [Data Contracts](./05-data-contracts.md).
 
-### 3.1 TransformedItem
+### 5.1 TransformedItem
 
 See [Data Contracts - Intermediate Data Schema](./05-data-contracts.md#2-intermediate-data-schema).
 
-### 3.2 OutputResult
+### 5.2 OutputResult
 
 See [Data Contracts - Output Result Schema](./05-data-contracts.md#6-output-result-schema).
 
 ---
 
-## 4. Protocol Compliance
+## 6. Protocol Compliance
 
-### 4.1 Type Checking
+### 6.1 Type Checking
 
 Protocols enable static type checking with tools like `mypy`:
 
@@ -311,7 +326,7 @@ Protocols enable static type checking with tools like `mypy`:
 mypy stac_manager/
 ```
 
-### 4.2 Runtime Verification
+### 6.2 Runtime Verification
 
 Protocol compliance can be verified at runtime:
 
@@ -336,7 +351,7 @@ def verify_extension(ext: Any) -> bool:
 
 ---
 
-## 5. Summary
+## 7. Summary
 
 The STAC Manager v1.0 architecture uses a strictly decoupled **Pipes and Filters** model:
 
