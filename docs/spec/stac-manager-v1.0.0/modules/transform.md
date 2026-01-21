@@ -18,7 +18,16 @@ The module is decomposed into specific sub-components to handle complexity:
 - **Responsibility**: Loads and validates transformation schema from YAML/JSON.
 - **Failure Mode**: Fails fast if the schema is invalid.
 
-### 2.2 FieldMapper
+### 2.2 Sidecar Indexing
+- **Responsibility**: Loads the `input_file` once at startup and builds an in-memory lookup table.
+- **Logic**:
+    1. **Pre-processing**: If `data_path` is set, extract the subset of data (e.g. `raw_data = jmespath.search(data_path, raw_file)`).
+    2. **Dict Input**: Assumes keys are IDs.
+    3. **List Input**: Iterates the list and uses `sidecar_id_path` (JMESPath) to extract the ID from each record.
+       - Index Structure: `{ extracted_id: record_dict }`
+       - **Constraint**: If multiple records have the same ID (e.g. from flattening multiple lists), the **Last Record Wins**. This module does **not** merge attributes from multiple sidecar records for the same ID.
+
+### 2.3 FieldMapper
 - **Responsibility**: Maps source fields to target STAC properties.
 - **Standard**: Uses the **JMESPath query language** for robust querying of nested source structures.
 - **Logic**: Handles nested lookups (`source.metadata.date`) and applies defaults if fields are missing.
@@ -74,7 +83,16 @@ class TransformConfig(BaseModel):
     input_file: Optional[str] = None
     """
     Path to sidecar data file (CSV/JSON/Parquet) for hydration.
-    Acts as a lookup table joined to the stream by ID.
+    """
+    sidecar_id_path: str = "id"
+    """
+    JMESPath query to extract the unique ID from sidecar records.
+    Used to build the lookup index when input_file is a LIST.
+    """
+    data_path: Optional[str] = None
+    """
+    Optional JMESPath to locate the list/dict of records within the input file.
+    Useful if the data is wrapped (e.g. "response.results").
     """
     schema_file: Optional[str] = None
     schema_mapping: Optional[SchemaConfig] = Field(alias='schema', default=None)
@@ -104,12 +122,12 @@ class TransformConfig(BaseModel):
 
 ## 4. I/O Contract
 
-### 3.1 Input
+### 4.1 Input
  
  - **Stream**: `Iterator[dict]` (Standard STAC Items or Skeleton Items)
  - **Sidecar (Optional)**: `input_file` (Raw Data for hydration)
  
- ### 3.2 Output
+ ### 4.2 Output
  
  - **Stream**: `Iterator[TransformedItem]` (Hydrated/Transformed Items)
 
