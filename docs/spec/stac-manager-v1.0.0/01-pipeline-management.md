@@ -279,12 +279,12 @@ The **StacManager** iterates over the `input_matrix` defined in configuration an
 
 ```python
 # Pseudocode: StacManager Matrix Execution
-matrix = config.strategy.input_matrix # e.g. [{"collection_id": "C1"}, {"collection_id": "C2"}]
+matrix = config.strategy.input_matrix # e.g. ["C1", "C2"]
 
 # Parallel execution function
-async def execute_matrix_entry(entry: dict):
+async def execute_matrix_entry(entry: str):
     # 1. Create Isolated Context (Child Context)
-    child_context = context.fork(data=entry) # Injects 'collection_id' into context.data
+    child_context = context.fork(data={"collection_id": entry}) # Injects 'collection_id' into context.data
     
     # 2. Run Pipeline for this entry
     await self.execute_pipeline(child_context)
