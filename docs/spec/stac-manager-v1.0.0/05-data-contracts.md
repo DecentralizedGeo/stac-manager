@@ -104,7 +104,7 @@ To support large-scale catalogs (1M+ items), the pipeline **MUST** use Iterators
      logger: logging.Logger                # Structured logger instance
      failure_collector: 'FailureCollector' # Error aggregator
      checkpoints: 'CheckpointManager'      # State persistence manager
-     data: dict[str, Any]                  # Inter-step ephemeral data store
+     data: dict[str, Any]                  # Inter-step ephemeral data & Matrix variables
  ```
  
  ### 2.3 FailureCollector

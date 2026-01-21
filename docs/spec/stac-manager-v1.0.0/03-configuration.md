@@ -129,6 +129,29 @@ config:
 
 The system will attempt to resolve `${VAR_NAME}` from the process environment variables at runtime. If the variable is missing, validation will fail.
 
+### 3.1 Matrix Variable Substitution
+Variables defined in `strategy.matrix` are also available for substitution within the `config` blocks of steps.
+- **Priority**: Matrix Variables > Environment Variables.
+- **Scope**: Matrix variables are only available within the specific pipeline instance spawned for that matrix entry.
+
+**Example**:
+
+```yaml
+strategy:
+  matrix:
+    - region: "us-west"
+      year: 2023
+    - region: "us-east"
+      year: 2024
+steps:
+  - id: ingest
+    module: IngestModule
+    config:
+      # Interpolates to "s3://bucket/us-west/2023/data.json"
+      # Run another process in parallel "s3://bucket/us-east/2024/data.json"
+      source_file: "s3://bucket/${region}/${year}/data.json"
+```
+
 ---
 
 ## 4. Module Instantiation Logic

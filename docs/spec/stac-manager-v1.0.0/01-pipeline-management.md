@@ -24,6 +24,7 @@ The **StacManager** is the engine that executes a pipeline of STAC operations.
 ### The StacManager
 The `StacManager` class:
 1. Loads and validates the YAML configuration.
+   - 1a. Resolves variable substitutions (Environment & Matrix context).
 2. Builds a pipeline DAG from step dependencies.
 3. Validates the DAG (no cycles, all dependencies exist).
 4. Instantiates components (Fetchers, Modifiers, Bundlers) for each step.
