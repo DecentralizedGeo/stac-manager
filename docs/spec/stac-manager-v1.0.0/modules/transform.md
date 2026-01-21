@@ -6,10 +6,10 @@
 ---
 
 ## 1. Purpose
-Transforms **"Dirty" or Non-STAC** source data (raw JSON, CSV, arbitrary API responses) into STAC-compatible intermediate structures. 
+Transforms **"Dirty" or Non-STAC** raw data (e.g. raw JSON, CSV) into STAC-compatible intermediate structures. 
 
 > [!NOTE]
-> **When NOT to use this module**: If your source data is already valid STAC (e.g. `pystac.Item` objects), do not use the Transform module. Use `PySTAC` directly in downstream modules. This module is strictly for bridging the gap between legacy formats and the STAC model.
+> **When NOT to use this module**: If your raw data has already been transformed into valid STAC (e.g. Items fetched during Ingest or Seed step), do not use the Transform module. Use the `Update` module instead to modify existing STAC items. This module is primaryly used to map raw data to their STAC equivalent properties (e.g. map CSV columns to STAC properties). See the [Workflow Patterns](../09-workflow-patterns.md) for use cases.
 
 ## 2. Architecture
 The module is decomposed into specific sub-components to handle complexity:
@@ -71,11 +71,10 @@ class SchemaConfig(BaseModel):
     mappings: List[MappingRule]
 
 class TransformConfig(BaseModel):
-    source_file: Optional[str] = None
+    input_file: Optional[str] = None
     """
-    Path to source data file(s). Supports:
-    - Single file: `./data/metadata.csv`
-    - Glob pattern: `./data/*.csv`
+    Path to sidecar data file (CSV/JSON/Parquet) for hydration.
+    Acts as a lookup table joined to the stream by ID.
     """
     schema_file: Optional[str] = None
     schema_mapping: Optional[SchemaConfig] = Field(alias='schema', default=None)
@@ -105,10 +104,15 @@ class TransformConfig(BaseModel):
 
 ## 4. I/O Contract
 
-**Input (Workflow Context)**:
-- None (reads from `source_file`) OR Input data from previous step.
+### 3.1 Input
+ 
+ - **Stream**: `Iterator[dict]` (Standard STAC Items or Skeleton Items)
+ - **Sidecar (Optional)**: `input_file` (Raw Data for hydration)
+ 
+ ### 3.2 Output
+ 
+ - **Stream**: `Iterator[TransformedItem]` (Hydrated/Transformed Items)
 
-**Output (Python)**:
 ```python
 def modify(self, item: dict, context: WorkflowContext) -> dict | None:
     """
