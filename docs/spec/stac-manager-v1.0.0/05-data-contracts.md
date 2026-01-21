@@ -22,10 +22,132 @@ To support large-scale catalogs (1M+ items), the pipeline **MUST** use Iterators
 3.  **Flexibility**: Allows non-STAC or "Dirty" metadata (from Transform modules) to flow through the same pipeline structure before being modified by downstream modules.
 
 **Requirement**: Item-processing modules **MUST NOT** accumulate entire streams into `list[dict]` in-memory.
-
----
-
-## 2. Intermediate Data Schema
+ 
+ ---
+ 
+ ## 2. System Contracts (Exceptions & Contexts)
+ 
+ ### 2.1 Exception Hierarchy
+ 
+ Stac Manager defines a strict hierarchy of exceptions for control flow.
+ 
+ ```python
+ class StacManagerError(Exception):
+     """Base exception for all STAC Manager errors."""
+     pass
+ 
+ class ConfigurationError(StacManagerError):
+     """
+     Configuration validation failed.
+     Usage: Raise at startup when config is invalid.
+     Effect: Workflow aborts before execution starts.
+     """
+     pass
+ 
+ class ModuleException(StacManagerError):
+     """
+     Critical module error.
+     Usage: Raise when module cannot continue (missing dependency, invalid state).
+     Effect: Workflow step fails, orchestrator aborts (or continues to next branch).
+     """
+     pass
+ 
+ class WorkflowConfigError(StacManagerError):
+     """
+     Invalid workflow definition.
+     Usage: Raise when workflow has structural errors (cycles, missing steps).
+     Effect: Workflow aborts before execution starts.
+     """
+     pass
+ 
+ class WorkflowExecutionError(StacManagerError):
+     """
+     Workflow execution failed.
+     Usage: Raised by orchestrator when critical step fails.
+     Effect: Workflow terminates, error logged.
+     """
+     pass
+ 
+ class DataProcessingError(StacManagerError):
+     """
+     Non-critical data error.
+     Usage: For item-level failures that should be collected, not raised.
+     Effect: Caught by module, logged to FailureCollector.
+     Note: This is often caught immediately, not propagated.
+     """
+     pass
+ 
+ class ExtensionError(StacManagerError):
+     """
+     Extension apply/validate error.
+     Usage: When extension cannot be applied to item.
+     Effect: Depends on context (may be collected or raised).
+     """
+     pass
+ ```
+ 
+ ### 2.2 WorkflowContext
+ 
+ The shared state object passed to every module's `execute()` method.
+ 
+ ```python
+ from dataclasses import dataclass
+ from typing import Any, TypedDict
+ import logging
+ # from stac_manager.config import WorkflowDefinition (Forward Ref)
+ 
+ @dataclass
+ class WorkflowContext:
+     """Shared state for pipeline execution."""
+     workflow_id: str                      # Unique execution identifier
+     config: Any                           # Full workflow definition (WorkflowDefinition)
+     logger: logging.Logger                # Structured logger instance
+     failure_collector: 'FailureCollector' # Error aggregator
+     checkpoints: 'CheckpointManager'      # State persistence manager
+     data: dict[str, Any]                  # Inter-step ephemeral data store
+ ```
+ 
+ ### 2.3 FailureCollector
+ 
+ Aggregates non-critical errors during workflow execution.
+ 
+ ```python
+ from dataclasses import dataclass
+ from typing import TypedDict, Optional
+ 
+ class FailureContext(TypedDict, total=False):
+     """Context for failure debugging."""
+     source_file: str
+     line_number: int
+     field_name: str
+     url: str
+     http_status: int
+     retry_attempt: int
+ 
+ @dataclass
+ class FailureRecord:
+     """Single failure record."""
+     step_id: str          # Step where failure occurred
+     item_id: str          # Item/record identifier (or "unknown")
+     error_type: str       # Exception class name or error category
+     message: str          # Error message
+     timestamp: str        # ISO 8601 timestamp
+     context: Optional[FailureContext]  # Optional additional context
+ 
+ class FailureCollector:
+     """
+     Collects non-critical failures for reporting.
+     """
+     def add(self, item_id: str, error: str | Exception, step_id: str = 'unknown', error_context: FailureContext | None = None) -> None:
+         ...
+     
+     def get_all(self) -> list[FailureRecord]:
+         ...
+ ```
+ 
+ ---
+ 
+ ## 3. Intermediate Data Schema
 
 The contract for `TransformModule`.
 
