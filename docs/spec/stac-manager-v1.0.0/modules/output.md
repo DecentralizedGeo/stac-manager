@@ -38,10 +38,9 @@ class OutputConfig(BaseModel):
     - 'parquet': Single GeoParquet file (Bulk Analytics).
     """
 
-    filename_template: str = "{item_id}.json"
+    BASE_URL: Optional[str] = None
     """
-    Template for item filenames.
-    Used only when format='json'.
+    Optional base URL for constructing self links.
     """
 
 class OutputResult(TypedDict):
