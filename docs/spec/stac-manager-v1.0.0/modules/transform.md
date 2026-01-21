@@ -108,7 +108,7 @@ class TransformConfig(BaseModel):
 - id: transform
   module: TransformModule
   config:
-    source_file: "./data/raw_metadata.csv"
+    input_file: "./data/raw_metadata.csv"
     schema:
       mappings:
         - source_field: "Acquisition_Date"
@@ -122,14 +122,16 @@ class TransformConfig(BaseModel):
 
 ## 4. I/O Contract
 
-### 4.1 Input
- 
- - **Stream**: `Iterator[dict]` (Standard STAC Items or Skeleton Items)
- - **Sidecar (Optional)**: `input_file` (Raw Data for hydration)
- 
- ### 4.2 Output
- 
- - **Stream**: `Iterator[TransformedItem]` (Hydrated/Transformed Items)
+**Input (Workflow Context)**:
+- `config` (Module Configuration):
+  - `input_file`: Sidecar data source.
+  - `schema`: Mapping rules.
+- `context.data` (injected by Matrix Strategy):
+  - Matrix Variables: Available for string interpolation in config.
+- **Stream**: `Iterator[dict]` (Standard STAC Items or Skeleton Items)
+
+**Output**:
+- **Stream**: `Iterator[TransformedItem]` (Hydrated/Transformed Items)
 
 ```python
 def modify(self, item: dict, context: WorkflowContext) -> dict | None:
