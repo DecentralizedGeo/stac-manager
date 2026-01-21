@@ -20,7 +20,7 @@ The module is decomposed into specific sub-components to handle complexity:
 
 ### 2.2 FieldMapper
 - **Responsibility**: Maps source fields to target STAC properties.
-- **Standard**: Uses **JMESPath** for robust querying of nested source structures.
+- **Standard**: Uses the **JMESPath query language** for robust querying of nested source structures.
 - **Logic**: Handles nested lookups (`source.metadata.date`) and applies defaults if fields are missing.
 
 #### FieldMapper Pseudocode
