@@ -277,30 +277,17 @@ async def search_native(url, params, semaphore):
 **Function Signature**:
 ```python
 async def temporal_split_search(
-    client, 
-    bbox, 
-    datetime_range, 
-    threshold=10000
-) -> AsyncIterator[pystac.Item]:
+    client: Client,
+    collection_id: str,
+    time_range: Optional[tuple[datetime, datetime]] = None,
+    bbox: Optional[list[float]] = None,
+    limit: int = 10000
+):
     """
-    Perform search with recursive temporal splitting.
+    Generator that yields STAC items from a search, splitting by time if needed.
+    Used by IngestModule to handle large result sets without timeouts.
     """
-    # 1. Get total count for current range
-    count = await client.search(bbox, datetime_range, limit=0).matched()
-    
-    # 2. Base Case: Count is small enough
-    if count <= threshold:
-         yield from client.search(bbox, datetime_range).items()
-         return
-
-    # 3. Recursive Case: Split time range
-    midpoint = get_midpoint(datetime_range.start, datetime_range.end)
-    
-    # Process First Half
-    yield from temporal_split_search(client, bbox, [start, midpoint])
-    
-    # Process Second Half
-    yield from temporal_split_search(client, bbox, [midpoint, end])
+    # Implementation logic...
 ```
 
 ---
