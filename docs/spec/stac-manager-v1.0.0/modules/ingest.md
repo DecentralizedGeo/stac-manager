@@ -95,13 +95,17 @@ class IngestFilters(BaseModel):
     collections: Optional[List[str]] = None
 
 class IngestConfig(BaseModel):
+    # API Mode: Required if source_file is not set
+    catalog_url: Optional[str] = None
+    
     # If provided in config, overrides Matrix context.
     collection_id: Optional[str] = None 
     
-    # Mode switch
+    # File Mode switch (Overrides API Mode)
     source_file: Optional[str] = None
     """
-    Path to a local file or glob pattern (e.g. "./data/*.json").
+    Path to a file or glob pattern (Local or Remote S3/GCS).
+    Example: "./data/*.json" or "s3://my-bucket/data/*.parquet"
     Supports: Parquet, JSON (FeatureCollection), or generic JSON files.
     """
     
