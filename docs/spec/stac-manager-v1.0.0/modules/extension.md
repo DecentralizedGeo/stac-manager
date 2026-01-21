@@ -20,13 +20,10 @@ The module follows a registry-based strategy to allow both strict built-ins and 
 
 ### 2.2 ExtensionLoader
 - **Responsibility**: Dynamically imports Python modules and verifies they implement the `Extension` Protocol.
-- **Caching**: Caches loaded extension classes for performance.
+- **Caching**: Should cache loaded extension classes for performance.
 - **Logic (Pseudocode)**:
   ```python
   def load_extension(self, name_or_path: str) -> Type[Extension]:
-      if name_or_path in self._cache:
-          return self._cache[name_or_path]
-          
       if name_or_path in BUILTINS:
           module = import_module(BUILTINS[name_or_path])
       else:
@@ -37,7 +34,6 @@ The module follows a registry-based strategy to allow both strict built-ins and 
       if irrelevant_checks(ext_class): 
            raise ValueError("Invalid Extension")
            
-      self._cache[name_or_path] = ext_class
       return ext_class
   ```
 
@@ -47,6 +43,29 @@ The module follows a registry-based strategy to allow both strict built-ins and 
     1. Checks if extension schema URI is in `stac_extensions`.
     2. Calls `extension.apply()`.
     3. Calls `extension.validate()` (if configured).
+
+#### Applicator Pseudocode (Tier 2)
+
+```python
+def apply(self, item: pystac.Item) -> pystac.Item:
+    """
+    Applies the extension to the items.
+    """
+    # 1. Apply Logic
+    item = self.extension.apply(item, self.config.config)
+    
+    # 2. Schema Check (Safety Net)
+    if self.extension.schema_url not in item.stac_extensions:
+        item.stac_extensions.append(self.extension.schema_url)
+        
+    # 3. Validation (Optional)
+    if self.config.validate:
+        is_valid, errors = self.extension.validate(item)
+        if not is_valid:
+            raise ExtensionError(f"Validation failed after application: {errors}")
+            
+    return item
+```
 
 ### 2.4 Pipe Interop (Dict <-> Item)
 The `ExtensionModule` implements the synchronous `Modifier` protocol:
