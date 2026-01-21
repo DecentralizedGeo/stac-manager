@@ -58,6 +58,10 @@ class UpdateConfig(BaseModel):
     """
     Path to a JSON file mapping Item IDs to update dictionaries.
     Format: {"item_id_1": {"properties.cloud_cover": 50}, ...}
+    
+    > [!WARNING]
+    > In V1.0, this file is loaded entirely into memory. 
+    > Be cautious with very large patch files (>100MB).
     """
 
     # --- Behavior ---
