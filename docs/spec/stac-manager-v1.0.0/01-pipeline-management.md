@@ -30,6 +30,13 @@ The `StacManager` class:
 5. Executes the pipeline levels, wiring streams between roles.
 6. Aggregates results and generates a summary report.
 
+### 2.1 Matrix Execution Strategy (Parallelism)
+The **Matrix Strategy** allows the StacManager to spawn parallel pipelines based on a global configuration list (e.g., a list of collections or regions).
+
+- **Concept**: The configuration defines a matrix (e.g., `input_matrix: collections`).
+- **Behavior**: The StacManager iterates over this matrix *before* starting execution. For each entry, it creates a fully isolated pipeline instance (sharing the same DAG structure) injected with the specific matrix values (e.g., `collection_id`).
+- **Benefit**: Fault isolation. If one collection fails, others continue processing.
+
 ### High-Level Flow
 
 ```mermaid
@@ -445,72 +452,51 @@ async def _execute_step(step_id: str, context: WorkflowContext):
     context.data[step_id] = result
 ```
 
-#### 7.4 Handling Branching Streams
-If a Fetcher or Modifier output is needed by multiple downstream steps, the StacManager uses `stream_tee` to prevent iterator exhaustion.
-
-```python
-async def stream_tee(
-    iterator: AsyncIterator[T], 
-    n: int = 2
-) -> tuple[AsyncIterator[T], ...]:
-    """Split an async iterator into n independent buffers."""
-    ...
-```
-
 ---
 
 ## 8. Data Flow Visualization
 
 ### 8.1 Collection-Centric Data Flow
 
-Each collection is processed through an independent linear pipeline:
+Each collection is processed through an independent linear pipeline triggered by the **Matrix Strategy**:
 
 ```mermaid
 graph TD
-    subgraph "Discovery (runs once)"
-        A[discover] -->|list of collections| B[Orchestrator]
-    end
+    Config[Configuration Matrix] -->|Spawns| P1[Pipeline A (Landsat)]
+    Config -->|Spawns| P2[Pipeline B (Sentinel)]
     
-    subgraph "Per-Collection Pipeline (parallel)"
-        B -->|collection_id| C[ingest]
-        C -->|items stream| D[apply_ext_1]
-        D -->|items stream| E[apply_ext_2]
-        E -->|items stream| F[validate]
-        F -->|valid items| G[output]
+    subgraph "Pipeline A (Landsat)"
+        C[ingest] -->|items| D[apply_ext]
+        D -->|items| E[validate]
+        E -->|items| F[output]
     end
 ```
 
-### 8.2 Collection-Centric Parallel Execution
+### 8.2 Per-Collection Parallel Execution
 
-The Discovery Fetcher yields a list of Collections. The **StacManager** spawns **independent pipelines per Collection**, enabling parallelism at the collection level while maintaining a linear item flow within each pipeline.
+The **StacManager** iterates over the `input_matrix` defined in configuration and spawns **independent pipelines per entry**.
 
 ```python
-# Pseudocode: StacManager Collection-Centric Flow
-collections = await discovery_fetcher.fetch(context)
+# Pseudocode: StacManager Matrix Execution
+matrix = config.strategy.input_matrix # e.g. [{"collection_id": "C1"}, {"collection_id": "C2"}]
 
-# Parallel collection processing
-async def process_collection(collection_id: str):
-    """Run a linear pipeline for one collection."""
-    # 1. Fetch Items
-    stream = await ingest_fetcher.fetch(context, collection_id=collection_id)
+# Parallel execution function
+async def execute_matrix_entry(entry: dict):
+    # 1. Create Isolated Context (Child Context)
+    child_context = context.fork(data=entry) # Injects 'collection_id' into context.data
     
-    # 2. Modify Items (Sequential Modifiers)
-    stream = apply_modifier(transform_mod, stream)
-    stream = apply_modifier(validate_mod, stream)
-    
-    # 3. Bundle Results
-    await output_bundler.bundle_stream(stream, context)
-    return await output_bundler.finalize(context)
+    # 2. Run Pipeline for this entry
+    await self.execute_pipeline(child_context)
 
 # Launch parallel pipelines
-results = await asyncio.gather(*[process_collection(c.id) for c in collections])
+results = await asyncio.gather(*[execute_matrix_entry(entry) for entry in matrix])
 ```
 
 > [!NOTE]
-> **Workflow Flexibility**: The example above shows a typical `Discover -> Ingest -> Extensions -> Validate -> Output` flow. 
+> **Workflow Flexibility**: The example above shows a typical `Ingest -> Extensions -> Validate -> Output` flow.
 > Other valid patterns include:
 > - `Ingest -> Output` (dump raw STAC to Parquet)
-> - `Transform -> Scaffold -> Validate -> Output` (ETL from CSV)
+> - `Seed -> Extensions -> Validate -> Output` (ETL from CSV)
 > - `Ingest -> Update -> Output` (patch existing metadata)
 >
 > The `depends_on` field in workflow YAML defines the execution order.

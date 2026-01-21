@@ -27,6 +27,15 @@ class SettingsConfig(BaseModel):
     default_concurrency: DefaultConcurrencyConfig = Field(default_factory=DefaultConcurrencyConfig)
     input_secrets: SecretsConfig = Field(default_factory=SecretsConfig)
 
+class StrategyConfig(BaseModel):
+    """Execution strategy configuration."""
+    matrix: Optional[List[Dict[str, Any]]] = None 
+    """
+    List of input parameters to spawn parallel pipelines.
+    Each dict is injected into the context.data of a child pipeline.
+    Example: [{"collection_id": "C1"}, {"collection_id": "C2"}]
+    """
+
 class StepConfig(BaseModel):
     """Defines a single workflow step."""
     id: str
@@ -43,6 +52,7 @@ class WorkflowDefinition(BaseModel):
     version: str = "1.0"
     
     settings: SettingsConfig = Field(default_factory=SettingsConfig)
+    strategy: StrategyConfig = Field(default_factory=StrategyConfig)
     steps: List[StepConfig]
 ```
 
@@ -90,9 +100,14 @@ settings:
   input_secrets:
     dotenv_path: "/etc/stac-manager/secrets.env"
 
+strategy:
+  matrix:
+    - collection_id: "landsat-c2-l2"
+      catalog_url: "https://cmr.earthdata.nasa.gov/stac/v1"
+
 steps:
-  - id: discover
-    module: DiscoveryModule
+  - id: ingest
+    module: IngestModule
     config:
        ...
 ```
