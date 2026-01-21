@@ -21,6 +21,10 @@ from typing import List
 
 class ValidateConfig(BaseModel):
     strict: bool = False
+    """
+    If True, validation errors raise `ModuleException` (aborting the workflow).
+    If False, validation errors raise `DataProcessingError` (detected and collected).
+    """
     extension_schemas: List[HttpUrl] = []
 ```
 
@@ -45,6 +49,7 @@ class ValidateConfig(BaseModel):
 def modify(self, item: dict, context: WorkflowContext) -> dict | None:
     """
     Validates item and returns it. Returns None if invalid (item is dropped).
+    The behavior for invalid items depends on `strict` config.
     """
 ```
 
