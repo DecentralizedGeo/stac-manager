@@ -52,39 +52,25 @@ async def fetch(self, context: WorkflowContext) -> AsyncIterator[dict]:
         yield item
 ```
 
-### 2.2 Internal Parallelism (`RequestSplitter`)
+### 2.1 Internal Parallelism (`RequestSplitter`)
 To allow high-throughput fetching from APIs without timeouts:
 - **Problem**: Fetching 1M items linearly (offset + limit) is slow and flaky.
 - **Solution**: The module internally splits the time range into chunks and fetches them in parallel.
 - **Component**: `RequestSplitter` (Worker Pool).
 
-#### RequestSplitter Pseudocode (Tier 2)
-```python
-import datetime
-from typing import Iterator
-
-class RequestSplitter:
-    """
-    Splits a large temporal query into smaller, safe-to-fetch chunks.
-    """
-    def generate_chunks(self, 
-                       time_range: tuple[datetime, datetime], 
-                       limit: int = 10000) -> Iterator[tuple[datetime, datetime]]:
-        """
-        Recursively split time range until estimated item count < limit.
-        """
-        # 1. Check count for current range (HEAD request)
-        count = self._get_count(time_range)
-        
-        if count <= limit:
-            # Safe chunk
-            yield time_range
-        else:
-            # Split and recurse
-            mid = time_range[0] + (time_range[1] - time_range[0]) / 2
-            yield from self.generate_chunks((time_range[0], mid), limit)
-            yield from self.generate_chunks((mid, time_range[1]), limit)
-```
+#### Delegation to Utility
+ 
+ The module delegates temporal splitting to the shared utility `stac_manager.utils.query.temporal_split_search`.
+ 
+ ```python
+ # Pseudo-implementation
+ async for items in temporal_split_search(
+     client=self.client, 
+     filters=self.filters, 
+     limit=self.config.concurrency.chunk_size
+ ):
+     yield items
+ ```
 
 ### 2.3 HTTP Strategy (Tier 3)
 - **Requirement**: Must use a **Non-blocking HTTP Client** (e.g., `httpx` or `aiohttp`) for item fetching to ensure the main event loop is not blocked by I/O.
