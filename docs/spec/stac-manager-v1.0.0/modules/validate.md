@@ -42,7 +42,12 @@ class ValidateConfig(BaseModel):
 ## 4. I/O Contract
 
 **Input (Workflow Context)**:
-- Items from previous step.
+- `config` (Module Configuration):
+  - `strict`: Validation strictness.
+  - `extension_schemas`: Additional schemas to validate against.
+- `context.data` (injected by Matrix Strategy):
+  - Matrix Variables: Available for string interpolation in config.
+- Items from previous step (Stream).
 
 **Output (Python)**:
 ```python

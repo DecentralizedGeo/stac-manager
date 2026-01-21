@@ -115,13 +115,12 @@ class IngestConfig(BaseModel):
 ## 4. I/O Contract
 
 **Input (Workflow Context)**:
-- `context.data` (injected by Matrix Strategy):
-  ```python
-  {
-      "collection_id": "landsat-c2-l2",
-      "catalog_url": "https://..."
-  }
-  ```
+- `config` (Module Configuration):
+  - `catalog_url` (Required for API Mode)
+  - `source_file` (Required for File Mode)
+- `context.data` (Injected by Matrix Strategy):
+  - `collection_id`: Used as the target collection if not overridden in config.
+  - Matrix Variables: Available for string interpolation (e.g. `${region}`).
 
 **Output**:
 ```python

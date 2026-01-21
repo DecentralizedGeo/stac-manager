@@ -122,7 +122,11 @@ class UpdateConfig(BaseModel):
 ## 4. I/O Contract
 
 **Input (Workflow Context)**:
-- Stream of STAC Items (`context.data`).
+- `config` (Module Configuration):
+  - `updates`, `removes`, `patch_file`
+- `context.data` (injected by Matrix Strategy):
+  - Matrix Variables: Available for string interpolation in config.
+- Stream of STAC Items from previous step.
 
 **Output**:
 - Stream of **Modified** STAC Items.

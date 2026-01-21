@@ -57,7 +57,12 @@ class SeedConfig(BaseModel):
 ## 4. I/O Contract
 
 **Input (Workflow Context)**:
-- `context.data`: Reads `collection_id` (injected by Matrix Strategy) to populate the item `collection` field if not set in `defaults`.
+- `config` (Module Configuration):
+  - `items`: List of explicit IDs.
+  - `source_file`: Path to external list.
+- `context.data` (injected by Matrix Strategy):
+  - `collection_id`: Populates item `collection` field if not set in defaults.
+  - Matrix Variables: Available for string interpolation.
 
 **Output**:
 ```python

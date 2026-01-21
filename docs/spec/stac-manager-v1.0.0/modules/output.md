@@ -78,7 +78,11 @@ class OutputResult(TypedDict):
 ## 4. I/O Contract
 
 **Input (Workflow Context)**:
-- Items from previous step (via `context.data`).
+- `config` (Module Configuration):
+  - `base_dir`, `format`, `BASE_URL`
+- `context.data` (injected by Matrix Strategy):
+  - Matrix Variables: Available for string interpolation in config.
+- Items from previous step (Stream).
 - `collection` object (from `WorkflowContext` metadata if available, to write `collection.json`).
 
 **Protocol Methods** (Bundler):

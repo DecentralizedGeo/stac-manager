@@ -127,7 +127,12 @@ class ExtensionConfig(BaseModel):
 ## 4. I/O Contract
 
 **Input (Workflow Context)**:
-- Items from previous step.
+- `config` (Module Configuration):
+  - `extension`: Extension name or path.
+  - `config`: Extension-specific settings.
+- `context.data` (injected by Matrix Strategy):
+  - Matrix Variables: Available for string interpolation in config.
+- Items from previous step (Stream).
 
 **Output (Python)**:
 ```python
