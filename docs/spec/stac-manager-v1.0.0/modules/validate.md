@@ -50,4 +50,16 @@ def modify(self, item: dict, context: WorkflowContext) -> dict | None:
 
 ## 5. Error Handling
 - **Invalid Item**: Item is dropped from the stream. Error details (schema path, message) are sent to `FailureCollector`.
+
+### 5.1 Failure Collection Pseudocode
+```python
+if not is_valid:
+    context.failure_collector.log(
+        item_id=item['id'],
+        step_id="validate",
+        error=f"Validation failed: {errors}"
+    )
+    return None # Drop item
+```
+
 - **Schema Unreachable**: Log warning. If `strict` is True, fail.
