@@ -264,8 +264,8 @@ Each collection is processed through an independent linear pipeline triggered by
 
 ```mermaid
 graph TD
-    Config[Configuration Matrix] -->|Spawns| P1[Pipeline A (Landsat)]
-    Config -->|Spawns| P2[Pipeline B (Sentinel)]
+    Config["Configuration Matrix"] -->|Spawns| P1["Pipeline A (Landsat)"]
+    Config -->|Spawns| P2["Pipeline B (Sentinel)"]
     
     subgraph "Pipeline A (Landsat)"
         C[ingest] -->|items| D[apply_ext]
