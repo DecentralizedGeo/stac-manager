@@ -6,95 +6,91 @@
 ---
 
 ## 1. Purpose
-The Ingest Module fetches STAC Items from a Collection with support for pagination, concurrency, and rate limiting. It handles the "crawling" aspect of the pipeline.
+The Ingest Module fetches STAC Items for a **single collection** (or target). It enables high-throughput fetching by leveraging internal parallelism.
 
-It supports two modes:
-1.  **API Crawl**: Fetch items from a remote STAC API.
-2.  **File Read**: Load items from a local file (JSON/Parquet), enabling the **Parquet Cache Strategy**.
+> [!IMPORTANT]
+> **Matrix Execution**: In v1.0, the StacManager spawn *parallel pipelines* based on the global `strategy.matrix` configuration.
+> Therefore, this module instance is responsible for fetching items for **one** matrix entry (e.g., one `collection_id`) injected into its context.
 
 ## 2. Architecture
-Fetching data from APIs at scale requires careful resource management.
 
-### 2.1 ItemFetcher
-- **Responsibility**: High-throughput data fetching.
-- **Context**: Consumes **Task Contexts** (containing `ItemSearch` objects) yielded by the Discovery module.
-- **Strategy**: **Native Async Search** (Strategy B).
-  - Use **Non-blocking HTTP Client** (e.g., `aiohttp`) for raw JSON fetching (non-blocking I/O).
-  - Use `pystac` only for parsing (CPU-bound).
-  - **Avoid**: Blocking calls (like `pystac_client.Client.search()`) in the hot path.
+### 2.1 Fetcher Logic
+- **Responsibility**: Fetch items from the source defined in the context/config.
+- **Context Awareness**: Reads `context.data` to determine its target (e.g., `collection_id`, `catalog_url`).
+- **Modes**:
+    1.  **API Mode**: Uses `pystac-client` and non-blocking HTTP to crawl an API.
+    2.  **File Mode**: Reads from a local file (Parquet/JSON) if `source_file` is set.
 
-### 2.2 Hybrid Fetching Strategy
-To optimize both logic ("splitting") and throughput ("fetching"):
+#### Fetch Loop Pseudocode (Tier 2)
 
-1.  **Control Plane (Sync/Threaded)**: Use `pystac-client` to Query Metadata.
-    - Specifically checking `search(...).matched()` counts.
-    - Used by `RequestSplitter` to verify if a range is safe to fetch.
-    - Runs in `ThreadPoolExecutor` to avoid blocking the loop.
-3.  **Data Plane (Native Async)**: Use **Non-blocking I/O** for Item Pages.
-    - Once a time-range is deemed "safe" (count < limit), fetch it using native async.
-    - Yields raw STAC Item **dictionaries** immediately to the pipeline.
-- **Responsibility**: Manages cursor/page tracking and query sharding.
-- **Strategy**: **Temporal Request Splitting**.
-  - Recursively split time ranges when item counts exceed threshold (e.g., 10k).
-  - Prevents deep pagination server timeouts (offset > 10k).
-
-#### RequestSplitter Pseudocode
 ```python
-class RequestSplitter:
-    """Handles temporal splitting for deep pagination."""
+async def fetch(self, context: WorkflowContext) -> AsyncIterator[dict]:
+    """
+    Orchestrates fetching logic based on mode (API vs File).
+    """
+    # 1. Resolve Target
+    # Priority: Config > Context (injected by Matrix)
+    collection_id = self.config.collection_id or context.data.get('collection_id')
     
-    def split_range(self, time_range: tuple[datetime, datetime]) -> Iterator[tuple[datetime, datetime]]:
-        """
-        Recursively split time range until count < limit.
-        """
-        # Control Plane: Use pystac-client (threaded) to get count
-        count = self.get_count_via_pystac_client(time_range)
-        
-        if count < self.max_items_per_request:
-            yield time_range
-            return
+    if not collection_id and not self.config.source_file:
+         raise ConfigurationError("Ingest target (collection_id or source_file) not defined")
 
-        # Split in half
-        mid_point = time_range[0] + (time_range[1] - time_range[0]) / 2
-        
-        # Recurse left
-        yield from self.split_range((time_range[0], mid_point))
-        
-        # Recurse right
-        yield from self.split_range((mid_point, time_range[1]))
+    # 2. File Mode
+    if self.config.source_file:
+         async for item in self._read_file(self.config.source_file):
+             yield item
+         return
+
+    # 3. API Mode (Parallel)
+    # Use RequestSplitter to break big jobs into small chunks
+    splitter = RequestSplitter(self.config)
+    chunks = splitter.generate_chunks(self.config.filters.datetime)
+    
+    # Spawn workers to fetch chunks in parallel
+    # Yields items as they arrive
+    async for item in self._fetch_chunks_parallel(chunks, context):
+        yield item
 ```
 
-### 2.3 RateLimiter
-- **Responsibility**: Enforces API politeness.
-- **Mechanism**: Token bucket/semaphore as defined in [Utilities](../07-utilities.md). Responds to `429 Retry-After` headers.
+### 2.2 Internal Parallelism (`RequestSplitter`)
+To allow high-throughput fetching from APIs without timeouts:
+- **Problem**: Fetching 1M items linearly (offset + limit) is slow and flaky.
+- **Solution**: The module internally splits the time range into chunks and fetches them in parallel.
+- **Component**: `RequestSplitter` (Worker Pool).
 
-### 2.4 FileFetcher (Parquet Cache Support)
-- **Responsibility**: Read items from a local file instead of an API.
-- **Trigger**: Active when `config.source_file` is set.
-### 2.4 FileFetcher (Parquet Cache Support)
-- **Responsibility**: Read items from a local file instead of an API.
-- **Trigger**: Active when `config.source_file` is set.
-- **Implementation (Pseudocode)**:
-
+#### RequestSplitter Pseudocode (Tier 2)
 ```python
-def fetch_from_file(self, path: str) -> Iterator[dict]:
-    if path.endswith(".parquet"):
-        # Use simple stac-geoparquet reader
-        df = stac_geoparquet.read(path)
-        yield from df.to_dicts()
-    else:
-        # JSON / GeoJSON
-        with open(path) as f:
-            data = json.load(f)
-            
-        if isinstance(data, dict):
-            if data.get("type") == "FeatureCollection":
-                yield from data.get("features", [])
-            else:
-                yield data # Single item
-        elif isinstance(data, list):
-            yield from data
+import datetime
+from typing import Iterator
+
+class RequestSplitter:
+    """
+    Splits a large temporal query into smaller, safe-to-fetch chunks.
+    """
+    def generate_chunks(self, 
+                       time_range: tuple[datetime, datetime], 
+                       limit: int = 10000) -> Iterator[tuple[datetime, datetime]]:
+        """
+        Recursively split time range until estimated item count < limit.
+        """
+        # 1. Check count for current range (HEAD request)
+        count = self._get_count(time_range)
+        
+        if count <= limit:
+            # Safe chunk
+            yield time_range
+        else:
+            # Split and recurse
+            mid = time_range[0] + (time_range[1] - time_range[0]) / 2
+            yield from self.generate_chunks((time_range[0], mid), limit)
+            yield from self.generate_chunks((mid, time_range[1]), limit)
 ```
+
+### 2.3 HTTP Strategy (Tier 3)
+- **Requirement**: Must use a **Non-blocking HTTP Client** (e.g., `httpx` or `aiohttp`) for item fetching to ensure the main event loop is not blocked by I/O.
+- **Pattern**:
+    - `pystac-client` (Sync/Threaded): Used for metadata discovery and split planning.
+    - `httpx/aiohttp` (Async): Used for high-volume item fetching.
 
 ## 3. Configuration Schema
 
@@ -103,71 +99,52 @@ from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any
 
 class IngestFilters(BaseModel):
-    temporal: Optional[Dict[str, str]] = None # {"start": "...", "end": "..."}
-    spatial: Optional[list[float]] = None # [minx, miny, maxx, maxy]
-    query: Optional[Dict[str, Any]] = None 
     """
-    STAC API Query Extension parameters (JSON body).
-    These filters are **applied to** the base ItemSearch object retrieved from WorkflowContext.
-    See: [STAC Item Search filter parameter](https://api.stacspec.org/v1.0.0-rc.1/item-search/#tag/Item-Search/operation/postItemSearch)
+    Common filters supported by STAC APIs.
     """
+    bbox: Optional[List[float]] = None
+    datetime: Optional[str] = None
+    query: Optional[Dict[str, Any]] = None
+    ids: Optional[List[str]] = None
+    collections: Optional[List[str]] = None
 
 class IngestConfig(BaseModel):
-    collection_id: str
-    """
-    Single collection ID to ingest.
-    The StacManager manages parallelism at the collection level,
-    spawning independent pipelines for each collection.
-    """
+    # If provided in config, overrides Matrix context.
+    collection_id: Optional[str] = None 
+    
+    # Mode switch
     source_file: Optional[str] = None
     """
-    Path to local JSON or Parquet file.
-    If set, overrides API fetching mode.
+    Path to a local file or glob pattern (e.g. "./data/*.json").
+    Supports: Parquet, JSON (FeatureCollection), or generic JSON files.
     """
-    limit: Optional[int] = Field(None, gt=0)
-    concurrency: int = Field(default=5, ge=1)
-    rate_limit: float = Field(default=10.0, gt=0)
-    filters: IngestFilters = Field(default_factory=IngestFilters)
-```
-
-> [!NOTE]
-> **ItemSearch Context**: When operating in API Crawl mode, the module expects the upstream Discovery step to have populated `context.data` with the necessary `ItemSearch` context (e.g. valid collection object or connection parameters). The `IngestFilters` are applied on top of this base context.
-
-### 3.1 Example Usage (YAML)
-
-```yaml
-- id: ingest
-  module: IngestModule
-  depends_on: [discover]
-  config:
-    collection_id: "landsat-c2-l2"
-    limit: 1000
-    concurrency: 20
-    filters:
-      spatial: [-180, -90, 180, 90]
-      query:
-        "eo:cloud_cover": {"lt": 5}
+    
+    # Internal Parallelism
+    concurrency: int = Field(default=10, ge=1)
+    
+    # Filters applied to the API search
+    filters: Optional[IngestFilters] = None 
 ```
 
 ## 4. I/O Contract
 
-- stream of **Task Contexts** (from Discovery): 
-  ```json
+**Input (Workflow Context)**:
+- `context.data` (injected by Matrix Strategy):
+  ```python
   {
-     "type": "collection_search",
-     "collection_id": "...",
-     "search_object": <pystac_client.ItemSearch>
+      "collection_id": "landsat-c2-l2",
+      "catalog_url": "https://..."
   }
   ```
 
-**Output (Python)**:
+**Output**:
 ```python
-AsyncIterator[dict]  # Yields raw STAC Item dictionaries
+AsyncIterator[dict] 
+# Yields a single interleaved stream of raw STAC Item dictionaries.
 ```
-> **Streaming Requirement**: This module yields items one-by-one or in small batches using `search_object.items_as_dicts()`. It MUST NOT accumulate the entire result set in memory.
 
 ## 5. Error Handling
-- **Fetch Failure (Single Page/Item)**: Log error to `FailureCollector`, skip, and continue.
-- **Rate Limit Exhaustion**: Retry N times, then fail the specific batch.
-- **Malformed Item**: Log validation warning, skip.
+- **429 (Rate Limit)**: Must implement exponential backoff.
+- **5xx (Server Error)**: Retry N times, then fail chunk.
+- **Partial Failure**: A failed chunk should be logged to `FailureCollector` but should not crash the entire pipeline (functionality allowing).
 
