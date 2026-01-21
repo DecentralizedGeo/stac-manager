@@ -19,7 +19,7 @@ To support large-scale catalogs (1M+ items), the pipeline **MUST** use Iterators
 ### Rationale: Why `dict` for inter-module transfer?
 1.  **Performance**: Avoids redundant serialization/deserialization cycles between every step in the pipeline.
 2.  **Stability**: Pass-through data (fields not used by a specific module) remains untouched and safe from library-version-specific parsing quirks.
-3.  **Flexibility**: Allows non-STAC or "Dirty" metadata (from Transform modules) to flow through the same pipeline structure before being scaffolded.
+3.  **Flexibility**: Allows non-STAC or "Dirty" metadata (from Transform modules) to flow through the same pipeline structure before being modified by downstream modules.
 
 **Requirement**: Item-processing modules **MUST NOT** accumulate entire streams into `list[dict]` in-memory.
 
@@ -27,7 +27,7 @@ To support large-scale catalogs (1M+ items), the pipeline **MUST** use Iterators
 
 ## 2. Intermediate Data Schema
 
-The contract between `TransformModule` and `ScaffoldModule`.
+The contract for `TransformModule`.
 
 ```python
 from typing import TypedDict, Any
@@ -266,7 +266,7 @@ class WorkflowResult(TypedDict):
 This document defines:
 
 1. **Streaming Requirement**: Use `AsyncIterator` not `list` for items
-2. **TransformedItem**: Contract between Transform and Scaffold modules
+2. **TransformedItem**: Contract for Transform module
 3. **Failure Report**: Complete schema for error tracking
 4. **Output Manifest**: Complete schema for documenting written files
 5. **Query Language**: JMESPath for field mapping

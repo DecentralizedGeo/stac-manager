@@ -37,7 +37,7 @@ class Fetcher(Protocol):
         Originate a stream of STAC Items or Collections.
         
         Note:
-            API Fetchers use native async (aiohttp). 
+            API Fetchers use native async (Non-blocking I/O). 
             File Fetchers use threads (via run_in_executor) to yield items asynchronously.
         """
         ...
