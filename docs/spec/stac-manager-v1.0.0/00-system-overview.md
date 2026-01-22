@@ -81,13 +81,11 @@ The system is organized into four distinct layers:
 
 ### Layer 2: Pipeline Management (StacManager)
 - **Responsibilities**: Build workflow DAGs, schedule steps, manage state (`WorkflowContext`), wire Fetchers to Bundlers.
-- **Components**: `StacManager`, `PipelineBuilder`, `FailureCollector`.
-- **Key Decision**: Rename `WorkflowOrchestrator` to `StacManager` to better reflect its role as the pipeline lifecycle manager.
+- **Components**: `StacManager`, `WorkflowContext`, `FailureCollector`.
 
 ### Layer 3: Pipeline Components (Roles)
 - **Responsibilities**: Implement domain logic within specialized protocols.
 - **Components**: Fetchers, Modifiers, and Bundlers.
-- **Key Decision**: Replace generic `ModuleProtocol` with role-specific interfaces to solve async/sync friction.
 
 ### Layer 4: Foundation (External)
 - **Responsibilities**: Standard STAC models, validation, and API clients.
@@ -112,6 +110,6 @@ The system is organized into four distinct layers:
 | **stac-geoparquet** | Format Conversion | Used by Bundlers for Parquet output |
 | **aiohttp** | Async HTTP | Engine for high-concurrency Fetchers |
 
-## 6. Summary
+## 7. Summary
 
 The `StacManager` v1.0 architecture implements a high-performance **Pipes and Filters** model optimized for streaming massive STAC catalogs. By strictly separating I/O (Fetchers), Logic (Modifiers), and Persistence (Bundlers), the system remains modular, testable, and robust against memory-related failures.
