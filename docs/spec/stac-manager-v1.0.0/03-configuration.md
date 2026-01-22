@@ -128,6 +128,8 @@ config:
 ```
 
 The system will attempt to resolve `${VAR_NAME}` from the process environment variables at runtime. If the variable is missing, validation will fail.
+> [!IMPORTANT]
+> **Substitution Timing**: Variable substitution happens **BEFORE** module instantiation. This ensures that Pydantic models in module constructors (`__init__`) receive fully resolved values (e.g., `year: "2023"` becomes `year: 2023` integer), preventing validation errors on template strings.
 
 ### 3.1 Matrix Variable Substitution
 Variables defined in `strategy.matrix` are also available for substitution within the `config` blocks of steps.
