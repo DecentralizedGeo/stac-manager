@@ -7,7 +7,12 @@
 
 ## 1. Purpose & Scope
 
-The STAC Manager utilities (`stac_manager/utils/`) are a **utility layer within STAC Manager** that serves dual purposes:
+> **Context**: This document covers **Phase 1: Utilities Foundation** of the STAC Manager implementation.  
+> See [Implementation Roadmap](./2026-01-22-stac-manager-roadmap.md) for the complete phased strategy.
+
+**STAC Manager** is a standalone Python library for STAC pipeline orchestration. This design covers the foundational **utilities layer** (`stac_manager/utils/`) that will be used by STAC Manager's pipeline modules (IngestModule, TransformModule, etc.) when implemented in Phase 2.
+
+The utilities serve dual purposes:
 
 ### Internal Use (STAC Manager Modules)
 - Power modules like `IngestModule`, `TransformModule`, `ValidateModule`
