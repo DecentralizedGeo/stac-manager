@@ -46,8 +46,8 @@ All through declarative YAML configuration or programmatic Python API.
 - ✅ Type-safe (mypy passes)
 
 **Deliverables**:
-- [Design Document](./2026-01-22-pystac-toolkit-design.md)
-- [Implementation Plan](./2026-01-22-pystac-toolkit-specification.md)
+- [Design Document](./2026-01-22-stac-manager-phase-1-utilities-design.md)
+- [Implementation Plan](./2026-01-22-stac-manager-phase-1-utilities-specification.md)
 - Working `stac_manager/utils/` package
 
 **Estimated Duration**: 2-3 days (18 granular TDD tasks)
@@ -266,6 +266,6 @@ Each phase produces:
 - [Module Specs](../spec/stac-manager-v1.0.0/modules/)
 
 ### Phase 1 Documents
-- [Utilities Design](./2026-01-22-pystac-toolkit-design.md)
-- [Implementation Plan](./2026-01-22-pystac-toolkit-specification.md)
-- [Research Findings](../../.gemini/antigravity/brain/b37745a6-e746-44a5-a76f-65581571d971/research-findings.md)
+- [Utilities Design](./2026-01-22-stac-manager-phase-1-utilities-design.md)
+- [Implementation Plan](./2026-01-22-stac-manager-phase-1-utilities-specification.md)
+- [Research Findings](../../../../../.gemini/antigravity/brain/b37745a6-e746-44a5-a76f-65581571d971/research-findings.md)

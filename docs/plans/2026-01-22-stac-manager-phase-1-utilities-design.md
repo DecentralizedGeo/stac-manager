@@ -1,7 +1,7 @@
 # STAC Manager Utilities Design
 **Date**: 2026-01-22  
 **Status**: Approved  
-**Related**: [Research Findings](../../.gemini/antigravity/brain/b37745a6-e746-44a5-a76f-65581571d971/research-findings.md)
+**Related**: [Research Findings](../../../../../.gemini/antigravity/brain/b37745a6-e746-44a5-a76f-65581571d971/research-findings.md)
 
 ---
 

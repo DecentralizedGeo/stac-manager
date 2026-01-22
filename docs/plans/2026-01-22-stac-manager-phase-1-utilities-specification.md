@@ -1,4 +1,4 @@
-# STAC Manager Utilities Implementation Plan
+# STAC Manager Phase 1 (Utilities) Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
@@ -7,7 +7,7 @@
 
 **Goal**: Build the foundational utility layer (`stac_manager/utils/`) that will power STAC Manager's pipeline modules (Phase 2) and orchestration engine (Phase 3). These utilities provide PySTAC-based operations for field manipulation, geometry processing, streaming, and validation.
 
-**Architecture**: Domain-Driven Modules (see [design doc](./2026-01-22-pystac-toolkit-design.md))
+**Architecture**: Domain-Driven Modules (see [design doc](./2026-01-22-stac-manager-phase-1-utilities-design.md))
 - `utils/serialization.py` - PySTAC ↔ dict conversion
 - `utils/field_ops.py` - Nested field manipulation, JMESPath, deep_merge
 - `utils/geometry.py` - Bbox calculation, geometry validation  
