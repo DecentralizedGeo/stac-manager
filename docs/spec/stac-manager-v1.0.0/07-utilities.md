@@ -63,8 +63,15 @@ def ensure_bbox(geometry: dict | None) -> list[float] | None:
     Returns:
         Bounding box [minx, miny, maxx, maxy] or None if geometry is None
     
-    Implementation:
-        Uses shapely.geometry.shape(geometry).bounds
+    Behavior:
+        Must correctly handle all GeoJSON geometry types:
+        - Point, MultiPoint
+        - LineString, MultiLineString
+        - Polygon, MultiPolygon
+        - GeometryCollection
+        
+        Returns None if geometry parameter is None.
+        For valid geometries, returns [west, south, east, north] coordinate bounds.
     """
     ...
 ```
@@ -98,6 +105,50 @@ def validate_and_repair_geometry(geometry: dict) -> tuple[dict | None, list[str]
         2. If invalid, attempt `shapely.make_valid` (GEOS >= 3.8).
         3. Fallback: `geometry.buffer(0)` check.
         4. If still invalid, return None (unrepairable).
+    """
+    ...
+```
+
+---
+
+## 2.3. Deep Dictionary Merge
+
+**Purpose**: Recursively merge two dictionaries with configurable conflict resolution.
+
+**Function Signature**:
+```python
+from typing import Any, Literal
+
+def deep_merge(
+    base: dict,
+    overlay: dict,
+    strategy: Literal['keep_existing', 'overwrite'] = 'overwrite'
+) -> dict:
+    """
+    Recursively merge two dictionaries.
+    
+    Args:
+        base: Base dictionary (modified in-place)
+        overlay: Dictionary to merge into base
+        strategy: Merge strategy for conflict resolution
+            - 'overwrite': overlay values replace base values (default)
+            - 'keep_existing': base values preserved, only add new keys from overlay
+    
+    Returns:
+        Merged dictionary (same object as base)
+        
+    Behavior:
+        For each key in overlay:
+        - If key not in base: add the key-value pair
+        - If both values are dicts: recursively merge the nested dicts
+        - If both values are lists: replace base list with overlay list (no list merging)
+        - Otherwise: apply the specified strategy
+        
+    Examples:
+        >>> base = {"a": 1, "b": {"c": 2}}
+        >>> overlay = {"b": {"d": 3}, "e": 4}
+        >>> deep_merge(base, overlay)
+        {"a": 1, "b": {"c": 2, "d": 3}, "e": 4}
     """
     ...
 ```
