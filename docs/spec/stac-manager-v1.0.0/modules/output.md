@@ -12,7 +12,7 @@ The primary output format is a "Static STAC" directory structure, consisting of 
 ## 2. Architecture
 - **Writers**:
     - **JSON (Default)**: Writes individual item files (`item_id.json`) and a `collection.json`.
-    - **Parquet (Optional)**: writes a single `items.parquet` file for bulk analytics using `stac-geoparquet`.
+    - **Parquet (Optional)**: writes a single `items.parquet` file at the root or configured path for bulk analytics using `stac-geoparquet`.
 - **Layout**: 
     - **Exploded (Standard)**: `/{base_dir}/{collection_id}/items/{item_id}.json` (or just `/{collection_id}/items/{item_id}.json` depending on configuration).
     - **Collection File**: Always generated as `/{base_dir}/{collection_id}/collection.json`.
@@ -49,10 +49,8 @@ class OutputResult(TypedDict):
     
     Attributes:
         files_written: List of absolute file paths created.
-        collection_path: Path to the generated collection.json (if applicable).
     """
     files_written: list[str]
-    collection_path: Optional[str]
 ```
 
 ### 3.1 Example Usage (YAML)
@@ -93,9 +91,17 @@ def bundle(self, item: dict, context: WorkflowContext) -> None:
     Writes the item to the configured destination.
     
     Logic:
-    1. Resolve output path: `base_dir / collection_id / items / filename_template`.
-    2. Write content atomically.
-    3. Update internal stats (files written).
+    1. If `BASE_URL` is configured:
+       - Update item links ('self', 'root', 'parent', 'collection') to fully qualified URLs.
+    
+    2. If format == 'json':
+       - Resolve output path: `base_dir / collection_id / items / filename_template`.
+       - Write content atomically (write to temp -> rename).
+       - Record file path in stats.
+       
+    3. If format == 'parquet':
+       - Buffer item in memory (or write to temporary Arrow stream).
+       - Do NOT write individual files.
     """
     ...
 
@@ -104,8 +110,15 @@ def finalize(self, context: WorkflowContext) -> OutputResult:
     Finalizes the output process.
     
     Logic:
-    1. If a 'collection' definition exists in context, write `collection.json` to `base_dir / collection_id /`.
-    2. Return report of all files written.
+    1. If format == 'parquet':
+       - Flush buffered items to `items.parquet`.
+       - Record file path.
+       
+    2. If a 'collection' definition exists in context:
+       - Write `collection.json` to `base_dir / collection_id /`.
+       - Record file path.
+       
+    3. Return report of all files written.
     """
     ...
 ```
