@@ -286,3 +286,18 @@ async def _execute_matrix(self, workflow: WorkflowDefinition, context: WorkflowC
     # Parallel execution
     await asyncio.gather(*[process_entry(row) for row in matrix])
 ```
+
+### 4.6 Matrix Error Handling
+
+**Per-Entry Failure Strategy**:
+- Each matrix entry executes in isolated context (failures don't affect other entries)
+- If entry pipeline raises `WorkflowExecutionError`: Log error, mark entry as failed, continue others
+- Return list of `WorkflowResult` objects (one per entry, including failed entries)
+
+**Critical Failures**:
+- If exception occurs outside entry processing (e.g., matrix iteration itself): Propagate immediately
+
+**Result Aggregation**:
+- Workflow success = ALL entries successful
+- Total items processed = Sum of `total_items_processed` from all entry results
+- Total failures = Sum of `failure_count` from all entry results

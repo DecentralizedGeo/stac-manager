@@ -139,6 +139,21 @@ steps:
 > [!NOTE]
 > **Config vs Execution**: The configuration example above suggests `apply_dgeo` and `apply_eo` run in parallel on the same input. The Linearization algorithm converts this into a sequential chain. This allows the configuration to remain logical and context-heavy (explicitly stating dependencies) while the runtime remains simple and robust.
 
+### 6.4 Error Handling
+
+**Cycle Detection**:
+- If cycle found: Identify one complete cycle path (e.g., `['A', 'B', 'C', 'A']`)
+- Raise `WorkflowConfigError` with descriptive message: `"Circular dependency detected: A -> B -> C -> A"`
+
+**Missing Dependencies**:
+- If step references unknown step ID: Raise `WorkflowConfigError` immediately during validation
+- Message should identify the problematic step and the missing dependency
+
+**Unreachable Steps**:
+- After topological sort, verify all steps are included in execution order
+- If steps missing: Raise `WorkflowConfigError` listing unreachable step IDs
+- Common cause: Disconnected subgraphs (steps with no path to/from other steps)
+
 ---
 
 ## 7. Module Loading Mechanism
@@ -238,6 +253,23 @@ async def _execute_step(step_id: str, context: WorkflowContext):
 > [!IMPORTANT]
 > **Sink Requirement**: Every pipeline MUST end with a 'Bundler' (Sink) step (e.g., `OutputModule`). 
 > If a pipeline ends with a 'Modifier' step, the returned generator effectively "dangles" unconsumed, and no work will be performed. The Orchestrator does NOT automatically drain streams.
+
+### 7.4 Bundler Error Handling
+
+**Item-Level Failures** (Non-Critical):
+- Wrap `bundle()` calls in try-except for `DataProcessingError`
+- Collect failure via `context.failure_collector.add()`
+- Continue processing remaining items (do not abort)
+- Log progress periodically (e.g., every 1000 items)
+
+**Step-Level Failures** (Critical):
+- If `ModuleException` raised: abort the step immediately
+- If `finalize()` fails: propagate exception (workflow fails)
+
+**Finalization**:
+- Call `finalize()` even if some items failed
+- Finalize writes whatever succeeded (partial results acceptable)
+- Return result indicating files written
 
 ---
 
