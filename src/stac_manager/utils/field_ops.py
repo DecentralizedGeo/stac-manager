@@ -1,5 +1,5 @@
 """Field manipulation utilities for STAC items."""
-from typing import Any
+from typing import Any, Literal
 
 
 def set_nested_field(item: dict, path: str, value: Any) -> None:
@@ -44,3 +44,34 @@ def get_nested_field(item: dict, path: str, default: Any = None) -> Any:
         current = current[key]
     
     return current
+
+
+def deep_merge(
+    base: dict,
+    overlay: dict,
+    strategy: Literal['keep_existing', 'overwrite'] = 'overwrite'
+) -> dict:
+    """
+    Recursively merge two dictionaries.
+    
+    Args:
+        base: Base dictionary (modified in-place)
+        overlay: Dictionary to merge into base
+        strategy: Merge strategy ('overwrite' or 'keep_existing')
+        
+    Returns:
+        Merged dictionary (same object as base)
+    """
+    for key, value in overlay.items():
+        if key in base and isinstance(base[key], dict) and isinstance(value, dict):
+            # Both are dicts - recurse
+            deep_merge(base[key], value, strategy)
+        elif key not in base:
+            # New key - always add
+            base[key] = value
+        elif strategy == 'overwrite':
+            # Key exists, overwrite
+            base[key] = value
+        # else: keep_existing - don't modify base[key]
+    
+    return base
