@@ -325,33 +325,77 @@ if errors:
 
 ---
 
-## 7. Environment Variable Substitution
+## 7. Variable Substitution
 
 ### 7.1 Purpose
-Resolve `${VAR_NAME}` placeholders in config from environment variables, supporting defaults.
+Resolve `${VAR_NAME}` and `${VAR_NAME:-default}` placeholders in configuration from environment variables and matrix context, supporting recursive substitution and automatic type inference.
 
-### 7.2 Function Signature
+### 7.2 Class Interface
 
 ```python
-def substitute_env_vars(config: dict) -> dict:
+from typing import Any, Dict
+import os
+
+class VariableSubstitutor:
     """
-    Replace ${VAR} and ${VAR:-default} placeholders with environment variable values.
+    Handles recursive environment and matrix variable substitution with type inference.
     
-    Args:
-        config: Configuration dict (may contain ${VAR} strings)
+    Supports patterns:
+    - ${VAR_NAME}: Replace with value from environment or context
+    - ${VAR_NAME:-default}: Replace with value, or use default if not found
     
-    Returns:
-        Configuration with placeholders replaced
-    
-    Raises:
-        ConfigurationError: If referenced env var doesn't exist AND no default provided
-    
-    Example:
-        Input:  {"token": "${API_TOKEN}", "url": "${API_URL:-https://api.com}"}
-        Env:    API_TOKEN=secret123
-        Output: {"token": "secret123", "url": "https://api.com"}
+    Priority: context_vars > env_vars
     """
-    ...
+    
+    def __init__(self, env_vars: Dict[str, str] | None = None):
+        """
+        Initialize substitutor with environment variables.
+        
+        Args:
+            env_vars: Optional environment variable override (defaults to os.environ)
+        """
+        self.env_vars = env_vars or dict(os.environ)
+    
+    def substitute(
+        self, 
+        value: Any, 
+        context_vars: Dict[str, Any] | None = None
+    ) -> Any:
+        """
+        Recursively substitute variables in any value type.
+        
+        Args:
+            value: Value to process (str, dict, list, or primitive)
+            context_vars: Optional context/matrix variables (take priority over env)
+            
+        Returns:
+            Value with all variable patterns resolved
+            
+        Behavior:
+            - Strings: Substitute patterns with type inference
+              - "123" -> 123 (int)
+              - "3.14" -> 3.14 (float)
+              - "true"/"false" -> True/False (bool)
+              - Other strings remain strings
+            - Dicts: Recursively process all values
+            - Lists: Recursively process all elements  
+            - Primitives (int, float, bool, None): Return unchanged
+            
+        Raises:
+            ConfigurationError: If ${VAR} has no default and VAR not found in environment or context
+            
+        Examples:
+            >>> sub = VariableSubstitutor()
+            >>> sub.substitute("${PORT}", {"PORT": "8080"})
+            8080  # Note: auto-converted to int
+            
+            >>> sub.substitute("${URL:-https://default.com}", {})
+            "https://default.com"
+            
+            >>> sub.substitute({"port": "${PORT}"}, {"PORT": "3000"})
+            {"port": 3000}
+        """
+        ...
 ```
 
 ---
