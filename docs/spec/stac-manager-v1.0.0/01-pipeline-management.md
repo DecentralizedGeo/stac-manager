@@ -77,69 +77,47 @@ graph TD
 ## 6. DAG Building Algorithm
 
 ### 6.1 Purpose
-Determine execution order from step dependencies, enabling parallel execution of independent steps.
+Determine a linear valid execution order from step dependencies. 
+This allows users to define flexible, readable dependency graphs (DAGs) in configuration—including branching parallel logic—while the engine executes them as a stable linear sequence to ensure predictable stream processing.
 
-### 6.2 Algorithm: Topological Sort
+### 6.2 Algorithm: Topological Sort + Linearization
 
-**Approach**: Kahn's Algorithm (BFS-based topological sort with level detection)
+**Approach**: Kahn's Algorithm (BFS-based topological sort) -> Flattened List
 
 **Steps**:
-1. Calculate in-degree (number of dependencies) for each step
-2. Find all steps with zero dependencies → Execution Level 1
-3. Remove Level 1 steps from graph, decrement in-degrees
-4. Find new zero-dependency steps → Execution Level 2
-5. Repeat until all steps assigned or cycle detected
+1. Calculate in-degree (number of dependencies) for each step.
+2. Identify independent steps (Level 0).
+3. Resolve dependencies layer by layer to build "Execution Levels".
+4. **Flatten** levels into a single ordered list: `[Step A, Step B, Step C]`.
 
-**Output**: List of execution levels, where each level contains steps that can run in parallel
+**Output**: A single list of steps in execution order.
 
 ```python
-def build_dag(steps):
+def build_execution_order(steps):
     """
-    Pseudocode for Dependency Resolution (Kahn's Algorithm).
+    Pseudocode for Dependency Resolution & Linearization.
     """
-    # 1. Initialize graph tracking
-    in_degree = {step.id: 0 for step in steps}
-    graph = {step.id: [] for step in steps}
+    # 1. Build Dependency Graph
+    graph = build_graph(steps)
     
-    # 2. Build adjacency list and calculate in-degrees
-    for step in steps:
-        for dependency in step.depends_on:
-            # Tier 2: Validation Logic
-            if dependency not in [s.id for s in steps]:
-                raise WorkflowConfigError(f"Step '{step.id}' depends on unknown step '{dependency}'")
-            
-            graph[dependency].append(step.id)
-            in_degree[step.id] += 1
-            
-    # 3. Find initial nodes (Level 0)
-    queue = [s for s in steps if in_degree[s] == 0]
-    execution_levels = []
+    # 2. Topological Sort (Kahn's Algorithm)
+    execution_levels = topological_sort(graph)
     
-    # 4. Process graph level-by-level
-    while queue is not empty:
-        current_level = queue  # All nodes in queue can run in parallel
-        execution_levels.append(current_level)
-        
-        next_queue = []
-        for step in current_level:
-            # "Remove" step and process neighbors
-            for neighbor in graph[step]:
-                in_degree[neighbor] -= 1
-                if in_degree[neighbor] == 0:
-                    next_queue.append(neighbor)
-        
-        queue = next_queue
-
-    # 5. Cycle Detection
-    if count(execution_levels) < total_steps:
+    # 3. Cycle Detection
+    if len(flatten(execution_levels)) < len(steps):
         raise Error("Cycle detected")
         
-    return execution_levels
+    # 4. Linearization (Flattening)
+    # Convert [[A], [B, C], [D]] -> [A, B, C, D]
+    # Note: B and C order is deterministic within the algorithm but interchangeable in the graph
+    linear_order = [step for level in execution_levels for step in level]
+        
+    return linear_order
 ```
 
 ### 6.3 Example
 
-**Workflow Configuration**:
+**Workflow Configuration** (Branching Style):
 ```yaml
 steps:
   - id: ingest           # No dependencies
@@ -149,15 +127,17 @@ steps:
   - id: output           # depends_on: [validate]
 ```
 
-**DAG Output**:
+**DAG Processing**:
+1.  **Levels**: `[[ingest], [apply_dgeo, apply_eo], [validate], [output]]`
+2.  **Flatten**: `['ingest', 'apply_dgeo', 'apply_eo', 'validate', 'output']`
+
+**Final Execution Order**:
 ```python
-[
-    ['ingest'],                # Level 0: Ingest (Source)
-    ['apply_dgeo', 'apply_eo'],# Level 1: Both depend on ingest (parallel!)
-    ['validate'],              # Level 2: Depends on both extensions
-    ['output']                 # Level 3: Depends on validate
-]
+['ingest', 'apply_dgeo', 'apply_eo', 'validate', 'output']
 ```
+
+> [!NOTE]
+> **Config vs Execution**: The configuration example above suggests `apply_dgeo` and `apply_eo` run in parallel on the same input. The Linearization algorithm converts this into a sequential chain. This allows the configuration to remain logical and context-heavy (explicitly stating dependencies) while the runtime remains simple and robust.
 
 ---
 
@@ -211,48 +191,53 @@ def _import_module(module_class_name: str):
 
 ### 7.3 Step Execution (Role-Based)
 
-The StacManager executes steps by identifying their role and wiring the data flow accordingly.
+The StacManager executes steps sequentially, wiring the output of upstream steps to the input of downstream steps via the `WorkflowContext`.
 
 ```python
 async def _execute_step(step_id: str, context: WorkflowContext):
     """Execute a single pipeline step."""
     step_config = steps[step_id]
-    component_class = _import_component(step_config.module)
-    instance = component_class(step_config.config)
+    component = load_component(step_config.module, step_config.config)
     
-    # 1. Determine Input Stream
-    input_data = context.data.get(step_config.depends_on[0]) if step_config.depends_on else None
+    # 1. Resolve Input Stream
+    # Retrieve input data from ALL dependencies
+    # If multiple dependencies, we might implement merging here in the future.
+    # For V1, we typically assume linear chains (size=1).
+    sources = [context.data[dep_id] for dep_id in step_config.depends_on]
+    input_stream = sources[0] if sources else None
 
     # 2. Execute based on Role
-    if hasattr(instance, 'fetch'):
-        # Role: Fetcher (Source)
-        result = instance.fetch(context)
+    if role_is_fetch(component):
+        # Role: Fetcher (Source) -> Returns AsyncIterator
+        return component.fetch(context)
         
-    elif hasattr(instance, 'modify'):
-        # Role: Modifier (Processor)
-        async def modifier_pipe(stream: AsyncIterator[dict]):
+    elif role_is_modify(component):
+        # Role: Modifier (Processor) -> Returns AsyncIterator (Wrapper)
+        # Orchestrator wraps the Sync modify() method in an Async Generator
+        async def modifier_wrapper(stream):
             async for item in stream:
-                # 2.1 Automatic Resume Check (Checkpointing)
-                if context.checkpoints.contains(item['id']):
-                    continue
-                
-                # 2.2 Execute Module logic
-                modified = instance.modify(item, context)
-                if modified is not None:
-                    yield modified
+                # Execute Sync Modifier
+                result = component.modify(item, context)
+                if result:
+                    yield result
         
-        result = modifier_pipe(input_data)
+        return modifier_wrapper(input_stream)
         
-    elif hasattr(instance, 'bundle'):
-        # Role: Bundler (Sink)
-        async for item in input_data:
-            instance.bundle(item, context)
-        
-        result = instance.finalize(context)
+    elif role_is_bundle(component):
+        # Role: Bundler (Sink) -> Drains Stream & Writes
+        # Orchestrator drives the loop, Bundler handles Async I/O
+        async for item in input_stream:
+            await component.bundle(item, context)
+            
+        # Finalize (write collection.json, flush buffers, etc.)
+        return await component.finalize(context)
     
-    # 3. Store Result (Stream or Manifest)
-    context.data[step_id] = result
+    # 3. Store Result is implicit (returned above)
 ```
+
+> [!IMPORTANT]
+> **Sink Requirement**: Every pipeline MUST end with a 'Bundler' (Sink) step (e.g., `OutputModule`). 
+> If a pipeline ends with a 'Modifier' step, the returned generator effectively "dangles" unconsumed, and no work will be performed. The Orchestrator does NOT automatically drain streams.
 
 ---
 
@@ -260,7 +245,7 @@ async def _execute_step(step_id: str, context: WorkflowContext):
 
 ### 8.1 Collection-Centric Data Flow
 
-Each collection is processed through an independent linear pipeline triggered by the **Matrix Strategy**:
+Each collection is processed through an **independent linear pipeline** triggered by the **Matrix Strategy**:
 
 ```mermaid
 graph TD
@@ -276,7 +261,7 @@ graph TD
 
 ### 8.2 Per-Collection Parallel Execution
 
-The **StacManager** iterates over the `input_matrix` defined in configuration and spawns **independent pipelines per entry**.
+The **StacManager** iterates over the `input_matrix` defined in configuration and spawns **independent pipelines per entry** using `context.fork()`.
 
 ```python
 # Pseudocode: StacManager Matrix Execution
@@ -285,7 +270,8 @@ matrix = config.strategy.input_matrix # e.g. ["C1", "C2"]
 # Parallel execution function
 async def execute_matrix_entry(entry: str):
     # 1. Create Isolated Context (Child Context)
-    child_context = context.fork(data={"collection_id": entry}) # Injects 'collection_id' into context.data
+    # This prevents Pipeline A from reading Pipeline B's data
+    child_context = context.fork(data={"collection_id": entry}) 
     
     # 2. Run Pipeline for this entry
     await self.execute_pipeline(child_context)
@@ -295,51 +281,43 @@ results = await asyncio.gather(*[execute_matrix_entry(entry) for entry in matrix
 ```
 
 > [!NOTE]
-> **Workflow Flexibility**: The example above shows a typical `Ingest -> Extensions -> Validate -> Output` flow.
-> Other valid patterns include:
-> - `Ingest -> Output` (dump raw STAC to Parquet)
-> - `Seed -> Extensions -> Validate -> Output` (ETL from CSV)
-> - `Ingest -> Update -> Output` (patch existing metadata)
->
-> The `depends_on` field in workflow YAML defines the execution order.
+> **Parallelism**: Parallel execution happens **between** matrix entries (e.g., Landsat runs at the same time as Sentinel). Within a single pipeline (Landsat), execution is **sequential-but-streaming** (Ingest feeds Apply, which feeds Validate).
 
 ---
 
 ## 9. Workflow Execution
 
- ### 9.1 Execution Pattern
+### 9.1 Execution Pattern (Linear)
 
 ```python
-async def execute() -> WorkflowResult:
-    """Execute workflow and return results."""
+async def execute_pipeline(context: WorkflowContext) -> WorkflowResult:
+    """Execute linear workflow pipeline."""
     
-    # 1. Build DAG
-    execution_levels = build_dag(self.steps)
+    # 1. Build Linear Execution Order
+    ordered_steps = build_execution_order(self.steps)
     
-    # 2. Execute level-by-level
-    for level_idx, level in enumerate(execution_levels):
-        logger.info(f"Executing level {level_idx}: {level}")
-        
-        # Execute all steps in level concurrently
-        tasks = [_execute_step(step_id, context) for step_id in level]
-        await asyncio.gather(*tasks)
+    logger.info(f"Pipeline Execution Order: {ordered_steps}")
+    
+    # 2. Execute Step-by-Step
+    # Because of the streaming model, "Execution" here primarily means "Wiring the Pipe".
+    # The actual data flow happens as the final Sink step pulls data.
+    for step_id in ordered_steps:
+        # Pass control to step (wires input -> output)
+        # Note: Modifiers yield quickly (generator creation). 
+        # Bundlers/Sinks await until stream is exhausted.
+        await _execute_step(step_id, context)
     
     # 3. Generate results
-    # Success = No critical crashes (Partial item failures are allowed)
-    return WorkflowResult(
-        success=True, 
-        status='completed_with_failures' if context.failure_collector.count() > 0 else 'completed',
-        summary=generate_processing_summary(result, context.failure_collector),
-        failures_path=config.get('output_failures', 'failures.json')
-    )
+    return WorkflowResult(...)
 ```
 
-### 9.2 Parallel Execution
+### 9.2 Streaming Behavior (Lazy Evaluation)
+Steps do not "complete" one by one in terms of data. They "start" one by one.
+1. `Ingest` starts -> Returns Generator.
+2. `Apply` starts -> Reads `Ingest` Generator -> Returns New Generator.
+3. `Output` starts -> Reads `Apply` Generator -> **Drains Stream** -> Writes File.
 
-Steps within the same execution level run **concurrently** using `asyncio.gather()`:
-- Maximizes throughput
-- Respects dependencies (steps only run after all dependencies complete)
-- Handles failures gracefully (one step failure doesn't crash others in same level)
+The pipeline is **pulled** from the end (the Sink). The `await _execute_step` for the Sink step blocks until the entire stream is processed.
 
 ---
 
