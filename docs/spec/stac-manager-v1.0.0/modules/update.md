@@ -24,14 +24,19 @@ The module applies changes in the following order for each item:
 4.  **Timestamp**: If `auto_update_timestamp` is True, set `properties.updated` to the current UTC time.
 
 ### 2.2 Path Syntax
-- Uses **Simple Dot Notation** (e.g., `properties.eo:cloud_cover`, `assets.thumbnail.href`).
-- **Not JMESPath**: Unlike the Transform module (which uses JMESPath for *querying* complex source data), the Update module uses simple path setters for *modification*.
+- **Simple Dot Notation**:
+    - **Dictionary Access**: `properties.eo:cloud_cover`
+    - **List Access**: `properties.providers[0].roles` (Zero-indexed)
+    - **Escaping**: Not supported. Keys containing dots (e.g., `my.field`) are **invalid** and will raise an error.
+- **Modification Only**: This syntax is strictly for *addressing targets* for modification, not for complex querying (unlike JMESPath in Transform).
 
-### 2.3 Structural Integrity (`create_missing_paths`)
-- When setting `properties.foo.bar = "value"`:
-    - If `properties` exists but `foo` does not:
-        - `create_missing_paths=True`: Creates `foo` as a dict, then sets `bar`.
-        - `create_missing_paths=False`: Raises an error (Target path not found).
+### 2.3 Structural Integrity & Error Handling
+- **Path Creation**:
+    - `create_missing_paths=True`: If a path segment is missing, a new dictionary is created.
+    - **Constraint**: Cannot create missing *list indices*. If `providers` is a list of length 1, `providers[5]` will raise a `DataProcessingError`.
+- **Path Collisions**:
+    - If a path segment exists but is **incompatible** with the traversal (e.g., trying to access `.bar` on a string), a `DataProcessingError` is raised.
+    - *Example*: `properties.title.foo = "bar"` where `title` is "My Image" (string). -> **Error**.
 
 ## 3. Configuration Schema
 
@@ -142,5 +147,6 @@ def modify(self, item: dict, context: WorkflowContext) -> dict:
 
 ## 5. Error Handling
 - **Path Not Found**: If `create_missing_paths=False` and path is missing, fail the item.
+- **Path Collision**: If traversing a non-container field (e.g. string) as if it were a dict/list, raise `DataProcessingError`.
 - **Removes**: If removing a non-existent path, ignore (idempotent).
 - **Patch File**: If `patch_file` is specified but missing/invalid, fail validation at startup.
