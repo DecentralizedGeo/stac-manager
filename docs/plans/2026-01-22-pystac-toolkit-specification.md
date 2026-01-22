@@ -1,8 +1,8 @@
-# PySTAC Toolkit Implementation Plan
+# STAC Manager Utilities Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal**: Build a domain-driven utility layer (`stac_manager/utils/`) for PySTAC operations that powers STAC Manager modules while remaining usable for external scripts.
+**Goal**: Build a domain-driven utility layer (`stac_manager/utils/`) within STAC Manager that provides PySTAC-based operations for internal modules while remaining usable for external scripts.
 
 **Architecture**: Domain-Driven Modules (see [design doc](./2026-01-22-pystac-toolkit-design.md))
 - `utils/serialization.py` - PySTAC ↔ dict conversion

@@ -1,4 +1,4 @@
-# PySTAC Toolkit Design
+# STAC Manager Utilities Design
 **Date**: 2026-01-22  
 **Status**: Approved  
 **Related**: [Research Findings](../../.gemini/antigravity/brain/b37745a6-e746-44a5-a76f-65581571d971/research-findings.md)
@@ -7,7 +7,7 @@
 
 ## 1. Purpose & Scope
 
-The PySTAC Toolkit is a **utility layer within STAC Manager** that serves dual purposes:
+The STAC Manager utilities (`stac_manager/utils/`) are a **utility layer within STAC Manager** that serves dual purposes:
 
 ### Internal Use (STAC Manager Modules)
 - Power modules like `IngestModule`, `TransformModule`, `ValidateModule`
