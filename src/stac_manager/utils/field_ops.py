@@ -1,5 +1,7 @@
 """Field manipulation utilities for STAC items."""
 from typing import Any, Literal
+import jmespath
+from stac_manager.exceptions import DataProcessingError
 
 
 def set_nested_field(item: dict, path: str, value: Any) -> None:
@@ -75,3 +77,23 @@ def deep_merge(
         # else: keep_existing - don't modify base[key]
     
     return base
+
+
+def apply_jmespath(item: dict, query: str) -> Any:
+    """
+    Apply JMESPath query to item.
+    
+    Args:
+        item: STAC item dict
+        query: JMESPath query string
+        
+    Returns:
+        Query result
+        
+    Raises:
+        DataProcessingError: If query is invalid
+    """
+    try:
+        return jmespath.search(query, item)
+    except Exception as e:
+        raise DataProcessingError(f"JMESPath query failed: {e}")

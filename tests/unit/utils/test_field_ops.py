@@ -1,6 +1,6 @@
 import pytest
-from stac_manager.utils.field_ops import set_nested_field, get_nested_field, deep_merge
-from tests.fixtures.stac_items import VALID_ITEM
+from stac_manager.utils.field_ops import set_nested_field, get_nested_field, deep_merge, apply_jmespath
+from tests.fixtures.stac_items import VALID_ITEM, NESTED_ITEM
 
 
 def test_set_nested_field_simple():
@@ -62,3 +62,21 @@ def test_deep_merge_keep_existing_strategy():
     assert result["a"] == 1  # Kept (not overwritten)
     assert result["b"]["c"] == 2  # Kept
     assert result["b"]["d"] == 4  # Added (new key)
+
+
+def test_apply_jmespath_simple_path():
+    """apply_jmespath extracts value with simple path."""
+    result = apply_jmespath(NESTED_ITEM, "id")
+    assert result == "nested-001"
+
+
+def test_apply_jmespath_nested_path():
+    """apply_jmespath extracts nested value."""
+    result = apply_jmespath(NESTED_ITEM, "properties.\"eo:cloud_cover\"")
+    assert result == 15.5
+
+
+def test_apply_jmespath_array_filter():
+    """apply_jmespath filters array."""
+    result = apply_jmespath(NESTED_ITEM, "properties.instruments[0]")
+    assert result == "OLI"
