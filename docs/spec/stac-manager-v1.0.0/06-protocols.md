@@ -9,7 +9,7 @@
 
 ## Overview
 
-This document defines the **type-safe contracts** that all modules and extensions must implement. These are Protocol-based interfaces that ensure consistency, enable type checking, and provide clear implementation requirements.
+This document defines the **type-safe contracts** that all modules must implement. These are Protocol-based interfaces that ensure consistency, enable type checking, and provide clear implementation requirements.
 
 ---
 
@@ -79,11 +79,18 @@ class Bundler(Protocol):
         """Initialize with step-specific configuration."""
         ...
         
-    def bundle(self, item: dict, context: 'WorkflowContext') -> None:
-        """Add an item to the current bundle/buffer."""
+    async def bundle(self, item: dict, context: 'WorkflowContext') -> None:
+        """
+        Add an item to the current bundle/buffer.
+        
+        Note:
+            **ASYNC**: This method MUST be non-blocking. 
+            Implementations should buffer items and use `run_in_executor` 
+            (or async libraries like aiohttp) when flushing to disk/network.
+        """
         ...
         
-    def finalize(self, context: 'WorkflowContext') -> dict:
+    async def finalize(self, context: 'WorkflowContext') -> dict:
         """
         Commit any remaining buffers and return an execution manifest.
         
@@ -127,7 +134,7 @@ class WorkflowContext:
 | **ExtensionModule** | Modifier | `def modify(...) -> dict | None` |
 | **ValidateModule** | Modifier | `def modify(...) -> dict | None` |
 | **UpdateModule** | Modifier | `def modify(...) -> dict | None` |
-| **OutputModule** | Bundler | `def bundle(...)` + `def finalize(...)` |
+| **OutputModule** | Bundler | `async def bundle(...)` + `async def finalize(...)` |
 
 ---
 
@@ -137,187 +144,33 @@ class WorkflowContext:
 - **Fetcher Concurrency**: Fetchers should use semaphores to honor concurrency limits.
 - **Modifier Simplicity**: Keep Modifiers sync for easier unit testing and implementation of business logic.
 
-### 3.1 Bundler Atomic Writes
+### 3.1 Bundler Async I/O
+Bundlers **MUST** implement buffering and non-blocking I/O.
+- **Good**: Buffer 100 items -> `await loop.run_in_executor(None, write_batch, batch)`
+- **Bad**: `with open(...)` inside `bundle()` (Blocks the entire pipeline)
+
+### 3.2 Bundler Atomic Writes
  Bundlers should implement a crash-only design (write-then-rename).
  
 ---
- 
- ## 4. Extension Protocol
- 
- Custom STAC extensions **MUST** implement this protocol to be compatible with the ExtensionModule.
 
-### 4.1 Protocol Definition
-
-```python
-from typing import Protocol
-import pystac
-
-class Extension(Protocol):
-    """
-    Protocol for STAC extension implementations.
-    
-    Extensions add domain-specific fields to STAC Items or Collections.
-    They must provide schema validation and field application logic.
-    """
-    
-    # Class-level attributes (must be defined)
-    extension_name: str      # Short name (e.g., "dgeo", "eo", "custom")
-    schema_url: str          # URL to JSON Schema for this extension
-    
-    def apply(
-        self,
-        item: pystac.Item | pystac.Collection,
-        config: dict
-    ) -> pystac.Item | pystac.Collection:
-        """
-        Apply extension fields to a STAC object.
-        
-        Args:
-            item: STAC Item or Collection to extend
-            config: Extension-specific configuration from workflow YAML
-        
-        Returns:
-            The same STAC object with extension fields added and
-            schema_url added to stac_extensions array
-        
-        Raises:
-            ExtensionError: If extension cannot be applied
-        
-        Note:
-            **Mutability**: This method modifies the input object in-place AND returns it.
-            Returning the object enables method chaining and consistent patterns.
-            **Required Action**: It MUST add the extension's schema_url to item.stac_extensions.
-        """
-        ...
-    
-    def validate(
-        self,
-        item: pystac.Item | pystac.Collection
-    ) -> tuple[bool, list[str]]:
-        """
-        Validate extension fields against the extension's JSON schema.
-        
-        Args:
-            item: STAC Item or Collection with extension fields
-        
-        Returns:
-            Tuple of (is_valid, error_messages)
-            - is_valid: True if all extension fields are valid
-            - error_messages: List of validation errors (empty if valid)
-        
-        Note:
-            This method typically delegates to stac-validator with
-            the extension's schema_url.
-        """
-        ...
-```
-
-### 4.2 Implementation Example
-
-```python
-import pystac
-from stac_validator import stac_validator
-
-class DgeoExtension:
-    """DecentralizedGeo STAC Extension for ownership and licensing."""
-    
-    extension_name = "dgeo"
-    schema_url = "https://raw.githubusercontent.com/DecentralizedGeo/dgeo-asset/refs/heads/pgstac-variant/json-schema/schema.json"
-    
-    def apply(
-        self,
-        item: pystac.Item,
-        config: dict
-    ) -> pystac.Item:
-        """Apply dgeo extension fields."""
-        
-        # Add extension to stac_extensions array
-        if self.schema_url not in item.stac_extensions:
-            item.stac_extensions.append(self.schema_url)
-        
-        # Add dgeo-specific properties
-        if 'ownership' in config:
-            item.properties['dgeo:ownership'] = config['ownership']
-        
-        if 'licensing' in config:
-            item.properties['dgeo:licensing'] = config['licensing']
-        
-        if 'provenance' in config:
-            item.properties['dgeo:provenance'] = config['provenance']
-        
-        return item
-    
-    def validate(self, item: pystac.Item) -> tuple[bool, list[str]]:
-        """Validate dgeo fields against schema."""
-        
-        validator = stac_validator.StacValidator()
-        is_valid = validator.validate_dict(
-            item.to_dict(),
-            custom_schema=self.schema_url
-        )
-        
-        errors = []
-        if not is_valid:
-            errors = validator.message if isinstance(validator.message, list) else [validator.message]
-        
-        return is_valid, errors
-```
-
-### 4.3 Extension Registration
-
-Extensions can be referenced in workflows by:
-
-1. **Short name** (if built-in): `extension: "dgeo"`
-2. **Full module path** (if custom): `extension: "my_package.extensions.MyExtension"`
-
-**Built-in Registry** (in ExtensionModule):
-```python
-BUILTIN_EXTENSIONS = {
-    'dgeo': 'stac_manager.extensions.dgeo.DgeoExtension',
-    'alternate-assets': 'stac_manager.extensions.alternate_assets.AlternateAssetsExtension',
-}
-```
-
-### 4.4 Key Requirements
-
-- **Schema URL**: Must be a publicly accessible JSON Schema
-- **Idempotent**: Calling `apply()` multiple times should be safe
-- **Immutability**: Don't modify `config`, only read from it
-- **Validation**: Use `stac-validator` library for schema checking
- 
- ### 4.5 Data Serialization
- 
- > [!IMPORTANT]
- > Extensions operate on **Pystac Objects**, but the pipeline passes **Dictionaries**.
- 
- The `ExtensionModule` MUST:
- 1. **Deserialize**: Convert the input `dict` to a `pystac.Item` (or `Collection`).
- 2. **Apply**: Use the `Extension` class to modify the object.
- 3. **Serialize**: Convert the modified `pystac` object back to a `dict` (using `to_dict()`) before returning.
- 
- ### 4.6 Resources
- 
- - [PySTAC Custom Extensions Tutorial](https://github.com/stac-utils/pystac/blob/main/docs/tutorials/adding-new-and-custom-extensions.ipynb)
-
----
-
-## 5. Data Transfer Objects
+## 4. Data Transfer Objects
 
 Data transfer objects used in the pipeline are defined centrally in [Data Contracts](./05-data-contracts.md).
 
-### 5.1 TransformedItem
+### 4.1 TransformedItem
 
-See [Data Contracts - Intermediate Data Schema](./05-data-contracts.md#2-intermediate-data-schema).
+See [Data Contracts - Intermediate Data Schema](./05-data-contracts.md#3-intermediate-data-schema).
 
-### 5.2 OutputResult
+### 4.2 OutputResult
 
 See [Data Contracts - Output Result Schema](./05-data-contracts.md#6-output-result-schema).
 
 ---
 
-## 6. Protocol Compliance
+## 5. Protocol Compliance
 
-### 6.1 Type Checking
+### 5.1 Type Checking
 
 Protocols enable static type checking with tools like `mypy`:
 
@@ -326,7 +179,7 @@ Protocols enable static type checking with tools like `mypy`:
 mypy stac_manager/
 ```
 
-### 6.2 Runtime Verification
+### 5.2 Runtime Verification
 
 Protocol compliance can be verified at runtime:
 
@@ -334,30 +187,25 @@ Protocol compliance can be verified at runtime:
 from typing import runtime_checkable
 
 @runtime_checkable
-class Extension(Protocol):
+class Fetcher(Protocol):
     ...
 
 # Check if object implements protocol
-def verify_extension(ext: Any) -> bool:
-    if not isinstance(ext, Extension):
-        raise TypeError(f"{ext} does not implement Extension protocol")
-    
-    # Check required attributes
-    if not hasattr(ext, 'extension_name'):
-        raise AttributeError("Extension missing 'extension_name'")
-    
+def verify_fetcher(obj: Any) -> bool:
+    if not isinstance(obj, Fetcher):
+        raise TypeError(f"{obj} does not implement Fetcher protocol")
     return True
 ```
 
 ---
 
-## 7. Summary
+## 6. Summary
 
 The STAC Manager v1.0 architecture uses a strictly decoupled **Pipes and Filters** model:
 
 1.  **Fetcher/Modifier/Bundler**: Specialized interfaces for clear roles.
 2.  **Shared Context**: `WorkflowContext` provides infrastructure (logging, errors, checkpoints).
 3.  **Wire Format**: `dict` is the standard data exchange format across the pipe for performance and interoperability.
-4.  **Plugin Strategy**: The `Extension` protocol allows for modular STAC enhancements.
 
 This ensures the system is high-performance, easy to test, and ready for implementation.
+
