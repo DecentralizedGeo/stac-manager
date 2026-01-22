@@ -29,11 +29,10 @@ steps:
   - id: enrich
     module: ExtensionModule
     config:
-      extension: "dgeo"
-      config:
-        ownership:
-          type: "individual"
-          did: "did:key:z6Mk..."
+      schema_uri: "https://example.com/schemas/dgeo.json"
+      defaults:
+        "properties.dgeo:ownership.type": "individual"
+        "properties.dgeo:ownership.did": "did:key:z6Mk..."
 
   - id: write
     module: OutputModule
