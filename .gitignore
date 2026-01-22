@@ -1,7 +1,7 @@
 .venv
 
 # Doc files
-/docs/plans
+/docs/plans/_legacy
 
 # Python related context
 __pycache__
@@ -10,3 +10,6 @@ __pycache__
 logs
 results
 data
+
+# misc folders and files
+archive
