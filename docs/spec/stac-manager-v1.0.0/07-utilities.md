@@ -13,256 +13,9 @@ This document defines shared utility components used across multiple modules. Th
 
 ---
 
-## 1. Rate Limiting
+## 1. Query Utilities
 
-### 1.1 Purpose
-Coordinate concurrent async requests to respect API rate limits and avoid overwhelming external services.
-
-### 1.2 Requirements
-
-**Configuration**:
-- `requests_per_second`: Maximum request rate (float)
-- `max_concurrent`: Maximum parallel requests (int)
-
-**Behavior**:
-- Block requests when rate limit would be exceeded
-- Distribute requests evenly over time
-- Handle API 429 (rate limit) responses gracefully
-
-### 1.3 Public Interface
-
-```python
-class RateLimiter:
-    """Rate limiter for async HTTP requests."""
-    
-    def __init__(
-        self,
-        requests_per_second: float,
-        max_concurrent: int = 10
-    ) -> None:
-        """
-        Initialize rate limiter.
-        
-        Args:
-            requests_per_second: Maximum request rate
-            max_concurrent: Maximum parallel requests
-        """
-        ...
-    
-    async def execute(
-        self,
-        func: Callable,
-        *args,
-        **kwargs
-    ) -> Any:
-        """
-        Execute function with rate limiting.
-        
-        Args:
-            func: Async function to execute
-            *args: Positional arguments for func
-            **kwargs: Keyword arguments for func
-        
-        Returns:
-            Result from func()
-        
-        Behavior:
-            - Waits if rate limit would be exceeded
-            - Blocks if max_concurrent limit reached
-        """
-        ...
-```
-
-### 1.4 Implementation Strategy
-
-**Approach**: Use `asyncio` primitives (Semaphore for concurrency, sleep for rate)
-
-**Mechanism**:
-- Semaphore to limit concurrent requests
-- Token bucket or sliding window for rate limiting
-- Track minimum interval between requests
-
-**Pseudocode (Rate Limiting Algo)**:
-```python
-async def acquire_slot(self):
-    # 1. Enforce Concurrency
-    await self.semaphore.acquire()
-    
-    # 2. Enforce Rate (Token Bucket)
-    current_time = now()
-    if (current_time - self.last_request) < self.min_interval:
-        sleep_duration = self.min_interval - (current_time - self.last_request)
-        await sleep(sleep_duration)
-        
-    self.last_request = now()
-    
-    try:
-        yield # Execute the request
-    finally:
-        self.semaphore.release()
-```
-
-**Usage Pattern**:
-```python
-# In IngestModule
-limiter = RateLimiter(requests_per_second=10.0, max_concurrent=5)
-
-async def fetch_item(url):
-    return await limiter.execute(fetch_from_api, url)
-```
-
----
-
-## 2. Retry Logic with Exponential Backoff
-
-### 2.1 Purpose
-Handle transient network failures by retrying with increasing delays.
-
-### 2.2 Requirements
-
-**Configuration**:
-- `max_attempts`: Maximum retry attempts (default: 3)
-- `base_delay`: Initial delay in seconds (default: 1.0)
-- `max_delay`: Maximum delay in seconds (default: 60.0)
-- `exponential_base`: Backoff multiplier (default: 2.0)
-
-**Behavior**:
-- Retry on network errors, timeouts, 429/500/502/503 responses
-- Increase delay exponentially: delay = base_delay * (exponential_base ^ attempt)
-- Cap delay at max_delay
-- Respect `Retry-After` header if present
-
-### 2.3 Public Interface
-
-```python
-async def retry_with_backoff(
-    func: Callable,
-    max_attempts: int = 3,
-    base_delay: float = 1.0,
-    max_delay: float = 60.0,
-    exponential_base: float = 2.0
-) -> Any:
-    """
-    Retry an async function with exponential backoff.
-    
-    Args:
-        func: Async function to retry (no arguments)
-        max_attempts: Maximum retry attempts
-        base_delay: Initial delay in seconds
-        max_delay: Maximum delay cap
-        exponential_base: Backoff multiplier
-    
-    Returns:
-        Result from successful function call
-    
-    Raises:
-        Last exception if all retries fail
-    
-    Behavior:
-        - Attempt 1: immediate
-        - Attempt 2: wait base_delay
-        - Attempt 3: wait base_delay * exponential_base
-        - Attempt N: wait min(base_delay * exponential_base^(N-2), max_delay)
-    """
-    ...
-```
-
-### 2.4 Usage Pattern
-
-```python
-# In IngestModule
-async def fetch_page():
-    async with session.get(url) as response:
-        response.raise_for_status()
-        return await response.json()
-
-# Retry on failure
-data = await retry_with_backoff(fetch_page, max_attempts=3)
-```
-
----
-
-## 3. Async Integration Patterns
-
-### 3.1 Purpose
-Run synchronous libraries (like `pystac-client`) in async workflows without blocking the event loop.
-
-### 3.2 When to Use Executor vs Native Async
-
-|  Scenario | Approach |
-|-----------|----------|
-| **Sync library with no async version** | Use `run_in_executor()` (Strategy A) |
-| **I/O-bound with async support** (e.g. Ingest) | Use native async (`aiohttp`) (Strategy B) |
-| **CPU-bound computation** | Use `run_in_executor()` with ProcessPoolExecutor |
-| **Quick sync operation (\<10ms)** | Just call it synchronously |
-
-
-### 3.3 Pattern: Executor Wrapper (Strategy A)
-
-**Problem**: `pystac-client` is synchronous, but modules must be async
-
-**Solution**: Run blocking operations in a thread pool
-
-**Implementation Pattern**:
-```python
-import asyncio
-from concurrent.futures import ThreadPoolExecutor
-
-class IngestModule:
-    def __init__(self, config: dict):
-        self.executor = ThreadPoolExecutor(max_workers=4)
-        self.catalog_url = config['catalog_url']
-    
-    async def execute(self, context: WorkflowContext):
-        """Run sync pystac-client in thread pool."""
-        loop = asyncio.get_event_loop()
-        
-        # Execute blocking function in thread pool
-        pages = await loop.run_in_executor(
-            self.executor,
-            self._search_sync,  # Sync function
-            self.catalog_url
-        )
-        
-        return pages
-    
-    def _search_sync(self, catalog_url: str) -> list:
-        """Synchronous search (runs in thread)."""
-        from pystac_client import Client
-        
-        client = Client.open(catalog_url)
-        return list(client.search(max_items=100).items())
-```
-
-### 3.4 Pattern: Native Async Search (Strategy B)
-
-**Problem**: `pystac-client` is blocking. For high-throughput ingest (>100 items/sec), threads scale poorly.
-
-**Solution**: Use `aiohttp` for raw JSON fetching, `pystac` only for parsing.
-
-**Pattern**:
-```python
-async def search_native(url, params, semaphore):
-    """
-    High-performance native async search.
-    
-    1. Fetch raw JSON pages concurrently (aiohttp)
-    2. Yield dicts immediately
-    3. Parse to pystac.Item only when needed (lazy)
-    """
-    async with semaphore:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(f"{url}/search", json=params) as resp:
-                data = await resp.json()
-                for feat in data['features']:
-                    yield pystac.Item.from_dict(feat)
-```
-
----
-
-## 4. Query Utilities
-
-### 4.1 Temporal Request Splitting
+### 1.1 Temporal Request Splitting
 
 **Purpose**: recursively split large time ranges to avoid deep pagination and server timeouts.
 
@@ -292,9 +45,9 @@ async def temporal_split_search(
 
 ---
 
-## 5. Geometry Utilities
+## 2. Geometry Utilities
 
-### 5.1 Bbox Calculation
+### 2.1 Bbox Calculation
 
 **Purpose**: Ensure STAC Items have valid bounding boxes
 
@@ -322,7 +75,7 @@ def ensure_bbox(geometry: dict | None) -> list[float] | None:
 bbox = ensure_bbox(transformed_data['geometry'])
 ```
 
-### 5.2 Geometry Validation and Repair
+### 2.2 Geometry Validation and Repair
 
 **Purpose**: Fix common geometry issues (unclosed polygons, invalid coordinates)
 
@@ -351,26 +104,26 @@ def validate_and_repair_geometry(geometry: dict) -> tuple[dict | None, list[str]
 
 ---
 
-## 6. State Persistence (Checkpointing)
+## 3. State Persistence (Checkpointing)
 
-### 6.1 Purpose
+### 3.1 Purpose
 Allow long-running async workflows to resume from where they left off after a crash or interruption.
 
-### 6.2 Detailed Specification
+### 3.2 Detailed Specification
 See [State Persistence & Recovery](./08-state-persistence.md) for the complete architecture, data schema, and API definition.
 
-### 6.3 Shared Pattern: Atomic Output
+### 3.3 Shared Pattern: Atomic Output
 (Moved to [08-state-persistence.md](./08-state-persistence.md#5-atomic-write-strategy))
 
 Modules writing files MUST follow the atomic write protocols defined in the State Persistence spec.
 
 ---
 
-## 7. Logging Utilities
+## 4. Logging Utilities
 
-### 7.1 Logger Setup
+### 4.1 Logger Setup
 
-**Purpose**: Configure structured logger from workflow config
+**Purpose**: Configure structured logger from workflow config, ensuring library safety and log rotation.
 
 **Function Signature**:
 ```python
@@ -385,21 +138,25 @@ def setup_logger(config: dict) -> logging.Logger:
         Configured logger with console and optional file handlers
     
     Configuration:
-        logging:
-          level: DEBUG | INFO | WARNING | ERROR
-          file: path/to/log/file.log (optional)
-          format: json | text (default: text)
+        settings:
+          logging:
+            level: DEBUG | INFO | WARNING | ERROR
+            file: path/to/log/file.log (optional, default: logs/stac_manager.log)
+            output_format: json | text (default: text)
     
     Behavior:
-        - Always adds console handler (stdout)
-        - Adds file handler if 'file' configured
-        - Creates log directory if needed
-        - Uses structured format with timestamps
+        - Gets logger 'stac_manager'
+        - Sets propagate=False to avoid duplicate logs when used as library
+        - Always adds console handler (stdout) with simplified format
+        - Adds RotatingFileHandler if 'file' configured or default
+          - MaxBytes: 10MB
+          - BackupCount: 5
+        - Uses structured JSON format for file if output_format='json'
     """
     ...
 ```
 
-### 7.2 Structured Logging Pattern
+### 4.2 Structured Logging Pattern
 
 **Module Logging Convention**:
 ```python
@@ -425,12 +182,12 @@ async def execute(self, context: WorkflowContext):
 
 ---
 
-## 8. Processing Summary Generator
+## 5. Processing Summary Generator
 
-### 8.1 Purpose
+### 5.1 Purpose
 Create human-readable summary of workflow execution results
 
-### 8.2 Function Signature
+### 5.2 Function Signature
 
 ```python
 def generate_processing_summary(
@@ -465,7 +222,7 @@ def generate_processing_summary(
     ...
 ```
 
-### 8.3 Usage
+### 5.3 Usage
 
 ```python
 # In CLI or StacManager
@@ -476,9 +233,9 @@ print(summary)
 
 ---
 
-## 9. Configuration Validation
+## 6. Configuration Validation
 
-### 9.1 Workflow Config Validator
+### 6.1 Workflow Config Validator
 
 **Purpose**: Validate workflow YAML before execution
 
@@ -517,17 +274,17 @@ if errors:
 
 ---
 
-## 10. Environment Variable Substitution
+## 7. Environment Variable Substitution
 
-### 10.1 Purpose
-Resolve `${VAR_NAME}` placeholders in config from environment variables
+### 7.1 Purpose
+Resolve `${VAR_NAME}` placeholders in config from environment variables, supporting defaults.
 
-### 10.2 Function Signature
+### 7.2 Function Signature
 
 ```python
 def substitute_env_vars(config: dict) -> dict:
     """
-    Replace ${VAR} placeholders with environment variable values.
+    Replace ${VAR} and ${VAR:-default} placeholders with environment variable values.
     
     Args:
         config: Configuration dict (may contain ${VAR} strings)
@@ -536,10 +293,10 @@ def substitute_env_vars(config: dict) -> dict:
         Configuration with placeholders replaced
     
     Raises:
-        ConfigurationError: If referenced env var doesn't exist
+        ConfigurationError: If referenced env var doesn't exist AND no default provided
     
     Example:
-        Input:  {"token": "${API_TOKEN}", "url": "https://api.com"}
+        Input:  {"token": "${API_TOKEN}", "url": "${API_URL:-https://api.com}"}
         Env:    API_TOKEN=secret123
         Output: {"token": "secret123", "url": "https://api.com"}
     """
@@ -548,44 +305,14 @@ def substitute_env_vars(config: dict) -> dict:
 
 ---
 
-## 11. Implementation Notes
-
-### 11.1 Library Choices
-
-These utilities can be implemented using:
-
-**Async/Concurrency**:
-- `asyncio` (stdlib) - Semaphores, sleep, executors
-- `aiohttp` - Async HTTP client
-
-**Geometry**:
-- `shapely` - Geometry validation and operations
-- `pyproj` - Coordinate transformations (if needed)
-
-**Logging**:
-- `logging` (stdlib) - Standard Python logging
-- Optional: `structlog` for structured JSON logs
-
-### 11.2 Testing Considerations
-
-Utilities should have comprehensive unit tests:
-- Rate limiter: Test request spacing, concurrency limits
-- Retry logic: Test backoff timing, failure scenarios
-- Geometry: Test edge cases (null island, antimeridian, poles)
-- Config validation: Test all error conditions
-
----
-
-## 12. Summary
+## 8. Summary
 
 This document defines:
 
-- **Rate Limiting**: Async request coordination
-- **Retry Logic**: Exponential backoff for network failures
-- **Async Patterns**: Integrating sync libraries in async workflows
+- **Query Utilities**: Temporal splitting for deep pagination results
 - **Geometry Utilities**: Bbox calculation and validation
 - **State Persistence**: Checkpointing and atomic writes
-- **Logging Setup**: Structured logger configuration
+- **Logging Setup**: Structured logger configuration with rotation
 - **Processing Summary**: Workflow result reporting (StacManager)
 - **Config Validation**: Pre-execution checks
-- **Env Var Substitution**: Secure credential handling
+- **Env Var Substitution**: Secure credential handling with defaults
