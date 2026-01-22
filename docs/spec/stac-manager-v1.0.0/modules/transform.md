@@ -9,7 +9,9 @@
 Transforms **"Dirty" or Non-STAC** raw data (e.g. raw JSON, CSV) into STAC-compatible intermediate structures. 
 
 > [!NOTE]
-> **When NOT to use this module**: If your raw data has already been transformed into valid STAC (e.g. Items fetched during Ingest or Seed step), do not use the Transform module. Use the `Update` module instead to modify existing STAC items. This module is primaryly used to map raw data to their STAC equivalent properties (e.g. map CSV columns to STAC properties). See the [Workflow Patterns](../09-workflow-patterns.md) for use cases.
+> **When NOT to use this module**: If your raw data has already been transformed into valid STAC (e.g. Items fetched during Ingest or Seed step), do not use the Transform module. Use the `Update` module instead to modify existing STAC items. 
+
+**Enrichment Mode**: This module is primarily designed for **Enrichment**. It joins "Sidecar" data (from CSV/JSON/Parquet) to items passing through the pipeline, using the Item `id` as the join key.
 
 ## 2. Architecture
 The module is decomposed into specific sub-components to handle complexity:
@@ -18,19 +20,37 @@ The module is decomposed into specific sub-components to handle complexity:
 - **Responsibility**: Loads and validates transformation schema from YAML/JSON.
 - **Failure Mode**: Fails fast if the schema is invalid.
 
-### 2.2 Sidecar Indexing
-- **Responsibility**: Loads the `input_file` once at startup and builds an in-memory lookup table.
-- **Logic**:
+### 2.2 Lifecycle & Optimization
+The module operates in two distinct phases to ensure performance:
+
+1.  **Setup Phase (Once per Workflow)**:
+    - Loads the `input_file` (Sidecar) into memory.
+    - Builds an optimized index `{ sidecar_id: record }` for O(1) lookups.
+2.  **Execution Phase (Per Item)**:
+    - Streams items from the pipeline.
+    - Performs a dictionary lookup using the Item's `id`.
+    - Applies transformation/enrichment.
+
+### 2.3 Sidecar Indexing & Join Logic
+- **Join Keys**:
+    - **Stream Side**: Always the STAC Item `id`.
+    - **Sidecar Side**: Configured via `sidecar_id_path` (JMESPath).
+- **Indexing Logic**:
     1. **Pre-processing**: If `data_path` is set, extract the subset of data (e.g. `raw_data = jmespath.search(data_path, raw_file)`).
     2. **Dict Input**: Assumes keys are IDs.
-    3. **List Input**: Iterates the list and uses `sidecar_id_path` (JMESPath) to extract the ID from each record.
+    3. **List Input**: Iterates the list and uses `sidecar_id_path` to extract the ID.
        - Index Structure: `{ extracted_id: record_dict }`
-       - **Constraint**: If multiple records have the same ID (e.g. from flattening multiple lists), the **Last Record Wins**. This module does **not** merge attributes from multiple sidecar records for the same ID.
+       - **Constraint**: If multiple records have the same ID, **Last Record Wins**.
+- **Join Strategies** (Configurable):
+    - `merge` (Default): Overwrites existing keys and **adds new keys** from sidecar data.
+    - `update`: Overwrites existing keys only. **Ignores new keys** that don't exist in the Item.
 
-### 2.3 FieldMapper
+### 2.4 FieldMapper
 - **Responsibility**: Maps source fields to target STAC properties.
-- **Standard**: Uses the **JMESPath query language** for robust querying of nested source structures.
-- **Logic**: Handles nested lookups (`source.metadata.date`) and applies defaults if fields are missing.
+- **Standard**: Uses **JMESPath** for querying source data and **Dot Notation** for setting target values.
+- **Logic**:
+    - **Extraction**: `jmespath.search(rule.source_field, source)`
+    - **Application**: Uses simple dot notation (e.g. `properties.eo:cloud_cover`) to construct nested dictionaries automatically if they don't exist.
 
 #### FieldMapper Pseudocode
 ```python
@@ -56,7 +76,7 @@ class FieldMapper:
         return value
 ```
 
-### 2.3 TypeConverter
+### 2.5 TypeConverter
 - **Responsibility**: Casts raw values to strict STAC types.
 - **Operations**:
     - String to RFC 3339 Datetime.
@@ -84,6 +104,12 @@ class TransformConfig(BaseModel):
     """
     Path to sidecar data file (CSV/JSON/Parquet) for hydration.
     """
+    strategy: Literal['merge', 'update'] = 'merge'
+    """
+    Join strategy:
+    - 'merge': Overwrite existing + Add new fields.
+    - 'update': Overwrite existing only.
+    """
     sidecar_id_path: str = "id"
     """
     JMESPath query to extract the unique ID from sidecar records.
@@ -109,6 +135,7 @@ class TransformConfig(BaseModel):
   module: TransformModule
   config:
     input_file: "./data/raw_metadata.csv"
+    strategy: "merge"
     schema:
       mappings:
         - source_field: "Acquisition_Date"
