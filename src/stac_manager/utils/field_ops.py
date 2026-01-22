@@ -21,3 +21,26 @@ def set_nested_field(item: dict, path: str, value: Any) -> None:
         current = current[key]
     
     current[keys[-1]] = value
+
+
+def get_nested_field(item: dict, path: str, default: Any = None) -> Any:
+    """
+    Get nested field value using dot notation.
+    
+    Args:
+        item: STAC item dict
+        path: Dot-separated path
+        default: Default value if path doesn't exist
+        
+    Returns:
+        Field value or default
+    """
+    keys = path.split('.')
+    current = item
+    
+    for key in keys:
+        if not isinstance(current, dict) or key not in current:
+            return default
+        current = current[key]
+    
+    return current
