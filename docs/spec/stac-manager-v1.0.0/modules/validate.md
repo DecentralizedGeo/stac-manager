@@ -6,12 +6,13 @@
 ---
 
 ## 1. Purpose
-Validates STAC Items and Collections against the core STAC specification (v1.1.0) and any registered extensions.
+Validates STAC Items and Collections against the core STAC specification (v1.1.0).
 
 ## 2. Architecture
 - **Backing**: Uses `stac-validator` library.
 - **Batching**: Capable of validating streams of items efficiently.
 - **Reporting**: Generates detailed validation reports for failures.
+- **Performance**: The `stac-validator` library can be heavy to initialize. The validator MUST be instantiated once in `__init__`, not per item in `modify`.
 
 ## 3. Configuration Schema
 
@@ -63,13 +64,24 @@ def modify(self, item: dict, context: WorkflowContext) -> dict | None:
 
 ### 5.1 Failure Collection Pseudocode
 ```python
-if not is_valid:
-    context.failure_collector.log(
-        item_id=item['id'],
-        step_id="validate",
-        error=f"Validation failed: {errors}"
-    )
-    return None # Drop item
+    # 1. Validate
+    is_valid, errors = self.validator.validate(item)
+
+    if not is_valid:
+        # A. Strict Mode: Abort Workflow
+        if self.config.strict:
+            raise ModuleException(f"Validation failed for {item.get('id')}: {errors}")
+        
+        # B. Lenient Mode: Collect Error & Drop Item
+        context.failure_collector.add(
+            item_id=item.get('id', 'unknown'),
+            step_id="validate",
+            error="ValidationFailed",
+            message=str(errors)
+        )
+        return None  # Drop from stream
+    
+    return item
 ```
 
-- **Schema Unreachable**: Log warning. If `strict` is True, fail.
+- **Schema Unreachable**: Log warning. If `strict` is True, raise `ModuleException`.
