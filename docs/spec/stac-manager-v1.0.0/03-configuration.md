@@ -168,28 +168,33 @@ For each step in the `WorkflowDefinition`:
 ```python
 # StacManager Instantiation Logic (Tier 2: Algorithmic Guidance)
 
-def _instantiate_modules(self, workflow: WorkflowDefinition) -> dict[str, ModuleInstance]:
+def _instantiate_step(self, step_config: StepConfig, context: WorkflowContext) -> ModuleInstance:
     """
-    Create module instances from workflow steps.
+    Instantiate a single module step with Context-aware substitution.
+    """
+    # 1. Substitute Variables (Env + Matrix + Context)
+    # Recursively replace ${var} in step_config.config
+    resolved_config = self.variable_substitutor.resolve(
+        step_config.config, 
+        context.data  # Matrix variables are in context.data
+    )
     
-    Returns:
-        Dictionary mapping step_id to instantiated module.
+    # 2. Resolve module class from registry
+    module_class = MODULE_REGISTRY.get(step_config.module)
+    if not module_class:
+        raise WorkflowConfigError(f"Unknown module: {step_config.module}")
+    
+    # 3. Instantiate with validated config
+    # Pydantic validation happens here inside the module's __init__
+    return module_class(config=resolved_config)
+    
+def _build_pipeline_instances(self, steps: List[StepConfig], context: WorkflowContext) -> dict[str, Any]:
+    """
+    Builds the pipeline components for THIS specific execution context.
     """
     instances = {}
-    
-    for step in workflow.steps:
-        # 1. Resolve module class from registry
-        module_class = MODULE_REGISTRY.get(step.module)
-        if not module_class:
-            raise WorkflowConfigError(f"Unknown module: {step.module}")
-        
-        # 2. Inject step config into module constructor
-        # The module's __init__ receives the raw config dict and validates
-        # it internally using Pydantic (see 4.3 below)
-        instance = module_class(config=step.config)
-        
-        instances[step.id] = instance
-    
+    for step in steps:
+        instances[step.id] = self._instantiate_step(step, context)
     return instances
 ```
 
@@ -257,22 +262,27 @@ async def fetch(self, context: WorkflowContext) -> AsyncIterator[dict]:
 When the StacManager spawns parallel per-collection pipelines (see [Pipeline Management](./01-pipeline-management.md#82-collection-centric-parallel-execution)), it injects the current `collection_id` into `context.data`:
 
 ```python
-# StacManager Per-Collection Dispatch (Tier 2: Algorithmic Guidance)
+# StacManager Matrix Execution (Tier 2: Algorithmic Guidance)
 
-async def _execute_collection_pipelines(self, collections: list[dict], context: WorkflowContext):
+async def _execute_matrix(self, workflow: WorkflowDefinition, context: WorkflowContext):
     """
-    Spawn parallel pipelines for each collection.
+    Spawn parallel pipelines for each matrix entry.
     """
-    async def process_one_collection(collection_dict: dict):
-        # Create a per-collection context with injected collection_id
-        collection_id = collection_dict['id']
-        context.data['_current_collection_id'] = collection_id
-        
-        # Execute remaining pipeline steps for this collection
-        await self._execute_pipeline_for_collection(collection_id, context)
+    matrix: List[dict] = workflow.strategy.matrix
     
-    # Parallel execution across collections
-    await asyncio.gather(*[
-        process_one_collection(c) for c in collections
-    ])
+    async def process_entry(entry: dict):
+        # 1. Fork Context & Inject Data
+        # 'entry' contains variables like {"collection_id": "C1"}
+        child_context = context.fork(data=entry)
+        
+        # 2. "Late Binding" Instantiation
+        # Instantiate modules specifically for THIS child context
+        # This allows ${collection_id} to be resolved before __init__
+        pipeline_instances = self._build_pipeline_instances(workflow.steps, child_context)
+        
+        # 3. Execute Pipeline
+        await self._execute_pipeline(pipeline_instances, child_context)
+
+    # Parallel execution
+    await asyncio.gather(*[process_entry(row) for row in matrix])
 ```
