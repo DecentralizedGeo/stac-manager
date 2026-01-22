@@ -15,4 +15,6 @@ def ensure_dict(obj: Union[dict, pystac.STACObject]) -> dict:
     """
     if isinstance(obj, dict):
         return obj
-    raise NotImplementedError("PySTAC object conversion not yet implemented")
+    if isinstance(obj, pystac.STACObject):
+        return obj.to_dict()
+    raise TypeError(f"Expected dict or PySTAC object, got {type(obj)}")
