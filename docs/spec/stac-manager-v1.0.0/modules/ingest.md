@@ -42,35 +42,53 @@ async def fetch(self, context: WorkflowContext) -> AsyncIterator[dict]:
          return
 
     # 3. API Mode (Parallel)
-    # Use RequestSplitter to break big jobs into small chunks
+    # Step A: Generate Time Chunks
+    # Uses RequestSplitter utility to calculate optimal date ranges
     splitter = RequestSplitter(self.config)
     chunks = splitter.generate_chunks(self.config.filters.datetime)
     
-    # Spawn workers to fetch chunks in parallel
-    # Yields items as they arrive
-    async for item in self._fetch_chunks_parallel(chunks, context):
+    # Step B: Worker Pool Management
+    # The Module explicitly manages the workers that process these chunks.
+    # This ensures we control the concurrency and error handling directly.
+    async for item in self._fetch_chunks_parallel(chunks, collection_id):
         yield item
+
+async def _fetch_chunks_parallel(self, chunks: List[TimeRange], collection_id: str) -> AsyncIterator[dict]:
+    """
+    Manages parallel workers to fetch items from chunks.
+    Implements 'Suppress & Collect' error handling pattern.
+    """
+    # Create a queue of chunks
+    queue = asyncio.Queue()
+    for chunk in chunks:
+        queue.put_nowait(chunk)
+        
+    # Spawn workers
+    workers = [self._worker(queue, collection_id) for _ in range(self.config.concurrency)]
+    
+    # Gather results as they arrive (simulated via merged iterator or similar pattern)
+    # Note: In practice, use an asyncio.Queue for output or a stream merging utility
+    async for result in merge_workers(workers):
+        try:
+            yield result
+        except DataProcessingError as e:
+            # Suppress & Collect: Don't crash pipeline for single item failure
+            self.context.failure_collector.add(
+                item_id="unknown", 
+                error=e, 
+                step_id="ingest",
+                context={"chunk": e.chunk_id}
+            )
+            continue
 ```
 
-### 2.1 Internal Parallelism (`RequestSplitter`)
+### 2.2 Internal Parallelism (Worker Strategy)
 To allow high-throughput fetching from APIs without timeouts:
 - **Problem**: Fetching 1M items linearly (offset + limit) is slow and flaky.
 - **Solution**: The module internally splits the time range into chunks and fetches them in parallel.
-- **Component**: `RequestSplitter` (Worker Pool).
+- **Component**: `RequestSplitter` (Logic Provider only).
 
-#### Delegation to Utility
- 
- The module delegates temporal splitting to the shared utility `stac_manager.utils.query.temporal_split_search`.
- 
- ```python
- # Pseudo-implementation
- async for items in temporal_split_search(
-     client=self.client, 
-     filters=self.filters, 
-     limit=self.config.concurrency.chunk_size
- ):
-     yield items
- ```
+The `RequestSplitter` calculates *how* to split the query (e.g. by year, month, or day), but the `IngestModule` is responsible for executing the split requests.
 
 ### 2.3 HTTP Strategy (Tier 3)
 - **Requirement**: Must use a **Non-blocking HTTP Client** (e.g., `httpx` or `aiohttp`) for item fetching to ensure the main event loop is not blocked by I/O.
@@ -92,7 +110,8 @@ class IngestFilters(BaseModel):
     datetime: Optional[str] = None
     query: Optional[Dict[str, Any]] = None
     ids: Optional[List[str]] = None
-    collections: Optional[List[str]] = None
+    # Note: 'collections' is NOT included here. 
+    # The target collection is strictly defined by IngestConfig.collection_id or Matrix context.
 
 class IngestConfig(BaseModel):
     # API Mode: Required if source_file is not set
