@@ -299,23 +299,41 @@ class OutputResult(TypedDict):
 
 ---
 
-## 7. Workflow Result Schema
+from pydantic import BaseModel, Field
+from typing import Literal
 
-Result structure returned by `StacManager.execute()`:
-
-```python
-from typing import TypedDict, Literal
-
-class WorkflowResult(TypedDict):
+class WorkflowResult(BaseModel):
     """
-    Result of a complete workflow execution.
+    Result of a complete workflow execution returned by StacManager.execute().
+    
+    This model provides comprehensive information about workflow execution,
+    including success status, failure details, and performance metrics.
     """
-    success: bool                                              # Overall success (no critical crashes)
-    status: Literal['completed', 'completed_with_failures', 'failed']
-    summary: str                                               # Human-readable summary
-    failure_count: int                                         # Total item-level failures
-    failures_path: str | None                                  # Path to failures.json (if any)
-```
+    success: bool = Field(
+        description="Overall success indicator (True if no critical crashes occurred)"
+    )
+    status: Literal['completed', 'completed_with_failures', 'failed'] = Field(
+        description="Execution status: 'completed' (all items successful), 'completed_with_failures' (some item-level failures collected), 'failed' (workflow crashed)"
+    )
+    summary: str = Field(
+        description="Human-readable summary of execution results"
+    )
+    failure_count: int = Field(
+        ge=0,
+        description="Total number of item-level failures collected during execution"
+    )
+    failures_path: str | None = Field(
+        default=None,
+        description="Absolute path to failures.json file if any failures occurred, None otherwise"
+    )
+    total_items_processed: int = Field(
+        ge=0,
+        description="Total number of items that entered the pipeline"
+    )
+    duration_seconds: float = Field(
+        ge=0.0,
+        description="Total execution time in seconds"
+    )
 
 ---
 
