@@ -41,3 +41,19 @@ def test_validate_module_strict_mode_raises():
         module.modify(invalid_item, context)
     
     assert "validation failed" in str(exc_info.value).lower()
+
+
+def test_validate_module_with_extension_schemas():
+    """ValidateModule validates against extension schemas."""
+    module = ValidateModule({
+        "extension_schemas": ["https://stac-extensions.github.io/eo/v1.1.0/schema.json"]
+    })
+    context = MockWorkflowContext.create()
+    
+    item = VALID_ITEM.copy()
+    item["stac_extensions"] = ["https://stac-extensions.github.io/eo/v1.1.0/schema.json"]
+    item["properties"]["eo:cloud_cover"] = 15.5
+    
+    result = module.modify(item, context)
+    
+    assert result is not None
