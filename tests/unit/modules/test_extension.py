@@ -99,3 +99,30 @@ def test_extension_module_applies_defaults():
         })
         
         assert module.template["properties"]["test:field"] == "custom_value"
+
+
+def test_extension_module_applies_to_item():
+    """ExtensionModule tags and merges template into item."""
+    from tests.fixtures.stac_items import VALID_ITEM
+    
+    with requests_mock.Mocker() as m:
+        m.get("https://example.com/schema.json", json=SIMPLE_SCHEMA)
+        
+        module = ExtensionModule({
+            "schema_uri": "https://example.com/schema.json",
+            "defaults": {"properties": {"test:field": "value"}}
+        })
+        context = MockWorkflowContext.create()
+        
+        item = VALID_ITEM.copy()
+        result = module.modify(item, context)
+        
+        # Check tagging
+        assert "stac_extensions" in result
+        assert "https://example.com/schema.json" in result["stac_extensions"]
+        
+        # Check scaffolding applied
+        assert result["properties"]["test:field"] == "value"
+        
+        # Check existing data preserved
+        assert result["properties"]["datetime"] == "2024-01-01T00:00:00Z"

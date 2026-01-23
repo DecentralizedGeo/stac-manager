@@ -66,3 +66,26 @@ class ExtensionModule:
             template["properties"][key] = default_val
         
         return template
+    
+    def modify(self, item: dict, context: WorkflowContext) -> dict:
+        """
+        Apply extension to item.
+        
+        Args:
+            item: STAC item dict
+            context: Workflow context
+        
+        Returns:
+            Item with extension applied
+        """
+        # 1. Tag extension
+        if "stac_extensions" not in item:
+            item["stac_extensions"] = []
+        
+        if self.config.schema_uri not in item["stac_extensions"]:
+            item["stac_extensions"].append(self.config.schema_uri)
+        
+        # 2. Merge template (keep existing values)
+        item = deep_merge(item, self.template, strategy='keep_existing')
+        
+        return item
