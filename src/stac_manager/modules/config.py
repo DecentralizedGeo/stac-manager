@@ -15,7 +15,7 @@ class UpdateConfig(BaseModel):
     updates: Optional[Dict[str, Any]] = None
     removes: Optional[List[str]] = None
     patch_file: Optional[str] = None
-    mode: Literal['merge', 'replace'] = 'merge'
+    mode: Literal['merge', 'replace', 'update_only'] = 'merge'
     create_missing_paths: bool = True
     auto_update_timestamp: bool = True
 

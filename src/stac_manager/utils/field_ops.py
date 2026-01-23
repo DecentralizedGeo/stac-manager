@@ -51,7 +51,7 @@ def get_nested_field(item: dict, path: str, default: Any = None) -> Any:
 def deep_merge(
     base: dict,
     overlay: dict,
-    strategy: Literal['keep_existing', 'overwrite'] = 'overwrite'
+    strategy: Literal['keep_existing', 'overwrite', 'update_only'] = 'overwrite'
 ) -> dict:
     """
     Recursively merge two dictionaries.
@@ -59,7 +59,7 @@ def deep_merge(
     Args:
         base: Base dictionary (modified in-place)
         overlay: Dictionary to merge into base
-        strategy: Merge strategy ('overwrite' or 'keep_existing')
+        strategy: Merge strategy ('keep_existing', 'overwrite', 'update_only')
         
     Returns:
         Merged dictionary (same object as base)
@@ -69,10 +69,11 @@ def deep_merge(
             # Both are dicts - recurse
             deep_merge(base[key], value, strategy)
         elif key not in base:
-            # New key - always add
-            base[key] = value
-        elif strategy == 'overwrite':
-            # Key exists, overwrite
+            # New key - add unless strategy is 'update_only'
+            if strategy != 'update_only':
+                base[key] = value
+        elif strategy != 'keep_existing':
+            # Key exists - overwrite if strategy is 'overwrite' or 'update_only'
             base[key] = value
         # else: keep_existing - don't modify base[key]
     
