@@ -19,3 +19,31 @@ class ExtensionModule:
             self.schema = response.json()
         except requests.RequestException as e:
             raise ConfigurationError(f"Failed to fetch schema from {self.config.schema_uri}: {e}")
+        
+        # Build template
+        self.template = self._build_template(self.schema)
+    
+    def _build_template(self, schema: dict) -> dict:
+        """
+        Parse JSON Schema to build scaffolding template.
+        
+        Args:
+            schema: JSON Schema dict
+        
+        Returns:
+            Template dict with null values
+        """
+        template = {"properties": {}}
+        
+        # Extract properties from schema
+        if "properties" in schema:
+            schema_props = schema["properties"]
+            if "properties" in schema_props and "properties" in schema_props["properties"]:
+                # Nested structure: schema.properties.properties.properties
+                target_props = schema_props["properties"]["properties"]
+                
+                for key, field_def in target_props.items():
+                    default_val = field_def.get("default", None)
+                    template["properties"][key] = default_val
+        
+        return template

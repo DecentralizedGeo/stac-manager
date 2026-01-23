@@ -40,3 +40,17 @@ def test_extension_module_schema_fetch_failure():
             ExtensionModule({"schema_uri": "https://example.com/missing.json"})
         
         assert "schema" in str(exc_info.value).lower()
+
+
+def test_extension_module_builds_template():
+    """ExtensionModule builds template from schema properties."""
+    with requests_mock.Mocker() as m:
+        m.get("https://example.com/schema.json", json=SIMPLE_SCHEMA)
+        
+        module = ExtensionModule({
+            "schema_uri": "https://example.com/schema.json"
+        })
+        
+        assert module.template is not None
+        assert "properties" in module.template
+        assert "test:field" in module.template["properties"]
