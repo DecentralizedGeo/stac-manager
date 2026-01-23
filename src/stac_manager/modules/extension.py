@@ -1,5 +1,7 @@
 """Extension Module - STAC extension scaffolding."""
 import requests
+import pystac.extensions
+from typing import Any, Dict, Optional, List
 from stac_manager.modules.config import ExtensionConfig
 from stac_manager.core.context import WorkflowContext
 from stac_manager.exceptions import ConfigurationError
@@ -12,6 +14,15 @@ class ExtensionModule:
     def __init__(self, config: dict) -> None:
         """Initialize and fetch schema."""
         self.config = ExtensionConfig(**config)
+        self.is_registered = False
+        
+        # Check if extension is registered with pystac
+        try:
+            registered = pystac.extensions.RegisteredExtension.get_by_uri(self.config.schema_uri)
+            if registered:
+                self.is_registered = True
+        except Exception:
+            pass
         
         # Fetch schema
         try:
@@ -28,6 +39,66 @@ class ExtensionModule:
         if self.config.defaults:
             self.template = deep_merge(self.template, self.config.defaults, strategy='overwrite')
     
+    def _resolve_ref(self, ref: str, schema: dict) -> dict:
+        """
+        Resolve a local JSON Schema reference.
+        
+        Args:
+            ref: Reference string (e.g., #/definitions/foo)
+            schema: Root schema to resolve from
+        
+        Returns:
+            Resolved definition dict
+        """
+        if not ref.startswith("#/"):
+            return {}
+        
+        parts = ref.split("/")[1:]
+        current = schema
+        for part in parts:
+            if isinstance(current, dict) and part in current:
+                current = current[part]
+            else:
+                return {}
+        return current
+
+    def _parse_field(self, definition: dict, schema: dict) -> Any:
+        """
+        Parse a field definition to return its scaffolded value.
+        
+        Args:
+            definition: Field definition dict
+            schema: Root schema for ref resolution
+            
+        Returns:
+            Value (dict for objects, default/None for others)
+        """
+        if "$ref" in definition:
+            resolved = self._resolve_ref(definition["$ref"], schema)
+            return self._parse_field(resolved, schema)
+        
+        if "allOf" in definition:
+            template = {}
+            for item in definition["allOf"]:
+                val = self._parse_field(item, schema)
+                if isinstance(val, dict):
+                    template.update(val)
+            return template
+
+        # If it's an object, parse its properties
+        properties = definition.get("properties", {})
+        if properties or definition.get("type") == "object":
+            template = {}
+            required = definition.get("required", [])
+            for key, prop_def in properties.items():
+                if self.config.required_fields_only and key not in required:
+                    continue
+                template[key] = self._parse_field(prop_def, schema)
+            return template
+        
+        # Leaf node: return default or None
+        return definition.get("default", None)
+
     def _build_template(self, schema: dict) -> dict:
         """
         Parse JSON Schema to build scaffolding template.
@@ -38,33 +109,48 @@ class ExtensionModule:
         Returns:
             Template dict with null values
         """
-        template = {"properties": {}}
+        template = {"properties": {}, "assets": {}}
         
-        target_props = {}
+        # Handle direct properties (legacy support)
+        if "properties" in schema and "properties" in schema["properties"]:
+             # Nested structure: schema.properties.properties
+             props_def = schema["properties"]["properties"]
+             template["properties"] = self._parse_field(props_def, schema)
         
-        # Handle direct properties
-        if "properties" in schema:
-            schema_props = schema["properties"]
-            if "properties" in schema_props and "properties" in schema_props["properties"]:
-                # Nested structure: schema.properties.properties.properties
-                target_props = schema_props["properties"]["properties"]
-        
-        # Handle oneOf variants
-        elif "oneOf" in schema:
+        # Handle oneOf variants (Standard STAC Extension pattern)
+        if "oneOf" in schema:
             for variant in schema["oneOf"]:
+                # Look for the Item/Feature variant
                 if variant.get("properties", {}).get("type", {}).get("const") == "Feature":
-                    # Found STAC Item definition
-                    if "properties" in variant.get("properties", {}):
-                        props_def = variant["properties"]["properties"]
-                        if "properties" in props_def:
-                            target_props = props_def["properties"]
+                    variant_props = variant.get("properties", {})
+                    
+                    # 1. Properties extension
+                    if "properties" in variant_props:
+                        # Properties definition is an object
+                        val = self._parse_field(variant_props["properties"], schema)
+                        if isinstance(val, dict):
+                            template["properties"].update(val)
+                    
+                    # 2. Assets extension
+                    if "assets" in variant_props:
+                        assets_def = variant_props["assets"]
+                        if "additionalProperties" in assets_def:
+                            template["assets"]["*"] = self._parse_field(assets_def["additionalProperties"], schema)
+                        elif "properties" in assets_def:
+                            # Merge properties into a single template for all assets
+                            assets_template = {}
+                            for key, prop_def in assets_def["properties"].items():
+                                assets_template[key] = self._parse_field(prop_def, schema)
+                            if assets_template:
+                                template["assets"]["*"] = assets_template
                     break
         
-        # Build template from extracted properties
-        for key, field_def in target_props.items():
-            default_val = field_def.get("default", None)
-            template["properties"][key] = default_val
-        
+        # Cleanup empty fields
+        if not template["properties"]:
+            template.pop("properties", None)
+        if not template["assets"]:
+            template.pop("assets", None)
+            
         return template
     
     def modify(self, item: dict, context: WorkflowContext) -> dict:
@@ -85,7 +171,30 @@ class ExtensionModule:
         if self.config.schema_uri not in item["stac_extensions"]:
             item["stac_extensions"].append(self.config.schema_uri)
         
-        # 2. Merge template (keep existing values)
-        item = deep_merge(item, self.template, strategy='keep_existing')
+        # 2. Apply properties template
+        if "properties" in self.template:
+            item["properties"] = deep_merge(
+                item.get("properties", {}), 
+                self.template["properties"], 
+                strategy='keep_existing'
+            )
+        
+        # 3. Apply assets template
+        if "assets" in self.template:
+            asset_template = self.template["assets"].get("*", {})
+            
+            # Ensure at least one asset exists if requested by user pattern
+            if "assets" not in item or not item["assets"]:
+                # Create a default asset using pystac
+                default_asset = pystac.Asset(href="Asset reference", title="Asset title")
+                item["assets"] = {"AssetId": default_asset.to_dict()}
+            
+            # Extend all assets
+            for asset_key in item["assets"]:
+                item["assets"][asset_key] = deep_merge(
+                    item["assets"][asset_key],
+                    asset_template,
+                    strategy='keep_existing'
+                )
         
         return item

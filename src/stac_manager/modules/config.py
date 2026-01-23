@@ -31,6 +31,7 @@ class ExtensionConfig(BaseModel):
     schema_uri: str
     defaults: Optional[Dict[str, Any]] = None
     validate: bool = False
+    required_fields_only: bool = False
 
 
 class TransformConfig(BaseModel):
