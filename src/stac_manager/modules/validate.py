@@ -1,6 +1,7 @@
 """Validate Module - STAC schema validation."""
 from stac_manager.modules.config import ValidateConfig
 from stac_manager.core.context import WorkflowContext
+from stac_manager.exceptions import DataProcessingError
 from stac_validator import stac_validator
 
 
@@ -23,6 +24,9 @@ class ValidateModule:
         
         Returns:
             Item if valid, None if invalid (permissive mode)
+        
+        Raises:
+            DataProcessingError: If strict=True and validation fails
         """
         # Validate item
         is_valid = self.validator.validate_dict(item)
@@ -34,6 +38,9 @@ class ValidateModule:
                 error_msg = "; ".join(errors)
             else:
                 error_msg = "Validation failed"
+            
+            if self.config.strict:
+                raise DataProcessingError(f"STAC validation failed: {error_msg}")
             
             context.failure_collector.add(
                 item_id=item.get("id", "unknown"),

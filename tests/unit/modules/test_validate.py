@@ -1,5 +1,6 @@
 import pytest
 from stac_manager.modules.validate import ValidateModule
+from stac_manager.exceptions import DataProcessingError
 from tests.fixtures.context import MockWorkflowContext
 from tests.fixtures.stac_items import VALID_ITEM
 
@@ -27,3 +28,16 @@ def test_validate_module_rejects_invalid_item():
     assert result is None
     assert len(context.failure_collector.failures) == 1
     assert "validation" in context.failure_collector.failures[0]["error"].lower()
+
+
+def test_validate_module_strict_mode_raises():
+    """ValidateModule raises error for invalid items in strict mode."""
+    module = ValidateModule({"strict": True})
+    context = MockWorkflowContext.create()
+    
+    invalid_item = {"id": "test"}
+    
+    with pytest.raises(DataProcessingError) as exc_info:
+        module.modify(invalid_item, context)
+    
+    assert "validation failed" in str(exc_info.value).lower()
