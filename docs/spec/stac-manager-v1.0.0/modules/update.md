@@ -70,7 +70,7 @@ class UpdateConfig(BaseModel):
     """
 
     # --- Behavior ---
-    mode: Literal['merge', 'replace'] = 'merge'
+    mode: Literal['merge', 'replace', 'update_only'] = 'merge'
     """
     Merge strategy for dictionary values. Lists are always replaced.
     """
