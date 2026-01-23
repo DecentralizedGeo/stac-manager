@@ -35,15 +35,29 @@ class ExtensionModule:
         """
         template = {"properties": {}}
         
-        # Extract properties from schema
+        target_props = {}
+        
+        # Handle direct properties
         if "properties" in schema:
             schema_props = schema["properties"]
             if "properties" in schema_props and "properties" in schema_props["properties"]:
                 # Nested structure: schema.properties.properties.properties
                 target_props = schema_props["properties"]["properties"]
-                
-                for key, field_def in target_props.items():
-                    default_val = field_def.get("default", None)
-                    template["properties"][key] = default_val
+        
+        # Handle oneOf variants
+        elif "oneOf" in schema:
+            for variant in schema["oneOf"]:
+                if variant.get("properties", {}).get("type", {}).get("const") == "Feature":
+                    # Found STAC Item definition
+                    if "properties" in variant.get("properties", {}):
+                        props_def = variant["properties"]["properties"]
+                        if "properties" in props_def:
+                            target_props = props_def["properties"]
+                    break
+        
+        # Build template from extracted properties
+        for key, field_def in target_props.items():
+            default_val = field_def.get("default", None)
+            template["properties"][key] = default_val
         
         return template
