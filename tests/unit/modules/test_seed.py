@@ -60,3 +60,42 @@ async def test_seed_module_context_enrichment():
     assert items[0]["collection"] == "landsat-c2"
 
 
+import tempfile
+import json
+
+
+@pytest.mark.asyncio
+async def test_seed_module_loads_from_file():
+    """SeedModule loads items from source_file."""
+    # Create temp JSON file
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+        json.dump(["file-item-001", "file-item-002"], f)
+        temp_path = f.name
+    
+    try:
+        module = SeedModule({"source_file": temp_path})
+        context = MockWorkflowContext.create()
+        
+        items = []
+        async for item in module.fetch(context):
+            items.append(item)
+        
+        assert len(items) == 2
+        assert items[0]["id"] == "file-item-001"
+        assert items[1]["id"] == "file-item-002"
+    finally:
+        import os
+        os.unlink(temp_path)
+
+
+from stac_manager.protocols import Fetcher
+
+
+def test_seed_module_protocol_compliance():
+    """SeedModule implements Fetcher protocol."""
+    module = SeedModule(SEED_CONFIG_BASIC)
+    assert isinstance(module, Fetcher)
+
+
+
+

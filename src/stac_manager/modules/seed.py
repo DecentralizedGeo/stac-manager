@@ -1,4 +1,6 @@
 """Seed Module - Generator source for skeleton items."""
+import json
+from pathlib import Path
 from typing import AsyncIterator
 from stac_manager.modules.config import SeedConfig
 from stac_manager.core.context import WorkflowContext
@@ -24,7 +26,23 @@ class SeedModule:
         """
         items_list = self.config.items or []
         
+        # Load tokens from file if configured
+        if self.config.source_file:
+            path = Path(self.config.source_file)
+            if path.exists():
+                with open(path, 'r', encoding='utf-8') as f:
+                    file_items = json.load(f)
+                    if isinstance(file_items, list):
+                        items_list.extend(file_items)
+            else:
+                context.failure_collector.add(
+                    item_id="global",
+                    error=f"Source file not found: {path}",
+                    step_id="seed"
+                )
+        
         for item_entry in items_list:
+
             item_dict = {}
             
             # Normalize to dict
