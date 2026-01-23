@@ -41,5 +41,9 @@ class SeedModule:
                 final_item = deep_merge(final_item, item_dict, strategy='overwrite')
                 item_dict = final_item
             
+            # Context enrichment
+            if "collection" not in item_dict and "collection_id" in context.data:
+                item_dict["collection"] = context.data["collection_id"]
+            
             yield item_dict
 

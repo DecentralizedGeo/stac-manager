@@ -44,3 +44,19 @@ async def test_seed_module_applies_defaults():
     assert items[1]["properties"]["platform"] == "Landsat-8"  # Item-specific
     assert items[1]["properties"]["instrument"] == "OLI"  # From defaults
 
+
+@pytest.mark.asyncio
+async def test_seed_module_context_enrichment():
+    """SeedModule enriches items from context.data."""
+    module = SeedModule({"items": ["item-001"]})
+    context = MockWorkflowContext.create(
+        data={"collection_id": "landsat-c2"}
+    )
+    
+    items = []
+    async for item in module.fetch(context):
+        items.append(item)
+    
+    assert items[0]["collection"] == "landsat-c2"
+
+
