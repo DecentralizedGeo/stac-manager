@@ -1,6 +1,7 @@
 import pytest
 from stac_manager.modules.validate import ValidateModule
 from stac_manager.exceptions import DataProcessingError
+from stac_manager.protocols import Modifier
 from tests.fixtures.context import MockWorkflowContext
 from tests.fixtures.stac_items import VALID_ITEM
 
@@ -57,3 +58,9 @@ def test_validate_module_with_extension_schemas():
     result = module.modify(item, context)
     
     assert result is not None
+
+
+def test_validate_module_implements_modifier_protocol():
+    """ValidateModule implements Modifier protocol."""
+    module = ValidateModule({})
+    assert isinstance(module, Modifier)
