@@ -71,7 +71,10 @@ import json
 def test_update_module_applies_patch_file():
     """UpdateModule applies patch from file."""
     with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
-        json.dump({"properties": {"patch_applied": True}}, f)
+        # Patch is now keyed by item ID
+        json.dump({
+            "test-item-001": {"properties": {"patch_applied": True}}
+        }, f)
         patch_path = f.name
     
     try:
@@ -82,6 +85,8 @@ def test_update_module_applies_patch_file():
         context = MockWorkflowContext.create()
         
         item = VALID_ITEM.copy()
+        # Ensure item knows its ID (VALID_ITEM usually has id='test-item-001')
+        
         result = module.modify(item, context)
         
         assert result["properties"]["patch_applied"] is True
@@ -90,5 +95,70 @@ def test_update_module_applies_patch_file():
         os.unlink(patch_path)
 
 
+from stac_manager.exceptions import DataProcessingError
 
 
+def test_update_module_path_collision_error():
+    """UpdateModule raises error on path collision."""
+    module = UpdateModule({
+        "updates": {"properties.datetime.invalid": "value"}
+    })
+    context = MockWorkflowContext.create()
+    
+    item = VALID_ITEM.copy()
+    # datetime is a string, can't traverse it
+    
+    with pytest.raises(DataProcessingError) as exc_info:
+        module.modify(item, context)
+    
+    
+    assert "Cannot traverse non-dict" in str(exc_info.value)
+
+
+from stac_manager.protocols import Modifier
+
+
+def test_update_module_protocols():
+    """UpdateModule implements Modifier protocol."""
+    # module = UpdateModule({})
+    module = UpdateModule({"updates": {"properties.test": "value"}})
+
+    assert isinstance(module, Modifier)
+
+
+
+
+
+
+
+def test_update_module_applies_patch_file_update_only(tmp_path):
+    """Test applying patches from a file in update_only mode."""
+    # Create patch file
+    patches = {
+        "test-item-001": {
+            "properties": {
+                "title": "Patched Title",  # Should update
+                "new_field": "Should Not Exist"  # Should be ignored (new key)
+            }
+        }
+    }
+    patch_file = tmp_path / "patches.json"
+    with open(patch_file, "w") as f:
+        json.dump(patches, f)
+        
+    config = {
+        "patch_file": str(patch_file),
+        "mode": "update_only",
+        "auto_update_timestamp": False
+    }
+    
+    module = UpdateModule(config)
+    
+    item = VALID_ITEM.copy()
+    # VALID_ITEM usually has "title" in properties? if not, we should set it to test logic.
+    item["properties"]["title"] = "Original Title"
+    
+    result = module.modify(item, None)
+    
+    assert result["properties"]["title"] == "Patched Title"
+    assert "new_field" not in result["properties"]
