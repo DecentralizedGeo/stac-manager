@@ -126,3 +126,14 @@ def test_extension_module_applies_to_item():
         
         # Check existing data preserved
         assert result["properties"]["datetime"] == "2024-01-01T00:00:00Z"
+
+
+def test_extension_module_implements_modifier_protocol():
+    """ExtensionModule implements Modifier protocol."""
+    from stac_manager.protocols import Modifier
+    
+    with requests_mock.Mocker() as m:
+        m.get("https://example.com/schema.json", json=SIMPLE_SCHEMA)
+        
+        module = ExtensionModule({"schema_uri": "https://example.com/schema.json"})
+        assert isinstance(module, Modifier)
