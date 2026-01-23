@@ -82,3 +82,20 @@ def test_extension_module_handles_oneof():
         })
         
         assert "custom:value" in module.template["properties"]
+
+
+def test_extension_module_applies_defaults():
+    """ExtensionModule overlays user defaults onto template."""
+    with requests_mock.Mocker() as m:
+        m.get("https://example.com/schema.json", json=SIMPLE_SCHEMA)
+        
+        module = ExtensionModule({
+            "schema_uri": "https://example.com/schema.json",
+            "defaults": {
+                "properties": {
+                    "test:field": "custom_value"
+                }
+            }
+        })
+        
+        assert module.template["properties"]["test:field"] == "custom_value"

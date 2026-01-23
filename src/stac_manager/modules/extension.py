@@ -3,6 +3,7 @@ import requests
 from stac_manager.modules.config import ExtensionConfig
 from stac_manager.core.context import WorkflowContext
 from stac_manager.exceptions import ConfigurationError
+from stac_manager.utils.field_ops import deep_merge
 
 
 class ExtensionModule:
@@ -22,6 +23,10 @@ class ExtensionModule:
         
         # Build template
         self.template = self._build_template(self.schema)
+        
+        # Apply user defaults over template
+        if self.config.defaults:
+            self.template = deep_merge(self.template, self.config.defaults, strategy='overwrite')
     
     def _build_template(self, schema: dict) -> dict:
         """
