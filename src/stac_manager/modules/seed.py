@@ -2,6 +2,7 @@
 from typing import AsyncIterator
 from stac_manager.modules.config import SeedConfig
 from stac_manager.core.context import WorkflowContext
+from stac_manager.utils.field_ops import deep_merge
 
 
 class SeedModule:
@@ -34,4 +35,11 @@ class SeedModule:
             else:
                 raise ValueError(f"Invalid item format: {type(item_entry)}")
             
+            # Apply defaults (defaults as base, item overrides)
+            if self.config.defaults:
+                final_item = self.config.defaults.copy()
+                final_item = deep_merge(final_item, item_dict, strategy='overwrite')
+                item_dict = final_item
+            
             yield item_dict
+
