@@ -49,9 +49,10 @@ class TransformConfig(BaseModel):
 class IngestConfig(BaseModel):
     """Configuration for IngestModule."""
     mode: Literal["file", "api"] = Field(description="Ingestion mode")
-    source: str = Field(description="File path or API URL")
+    source: str = Field(description="File path (file mode) or API catalog URL (api mode)")
     format: Optional[Literal["json", "parquet"]] = Field(default="json", description="File format (file mode only)")
-    collections: Optional[List[str]] = Field(default=None, description="Collections to search (API mode)")
+    collection_id: Optional[str] = Field(default=None, description="Single collection to fetch (API mode). If not set, uses context.data['collection_id']")
+    concurrency: int = Field(default=10, ge=1, description="Number of parallel workers for API requests")
     bbox: Optional[List[float]] = Field(default=None, description="Bounding box filter")
     datetime: Optional[str] = Field(default=None, description="Datetime filter")
     query: Optional[Dict[str, Any]] = Field(default=None, description="CQL query")

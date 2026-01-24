@@ -96,7 +96,7 @@ async def test_ingest_api_search_success():
     config = {
         "mode": "api",
         "source": "https://example.com/stac",
-        "collections": ["sentinel-2"],
+        "collection_id": "sentinel-2",
         "limit": 100
     }
     
@@ -114,5 +114,57 @@ async def test_ingest_api_search_success():
     # Verify search was called with correct params
     mock_client.search.assert_called_once()
     call_kwargs = mock_client.search.call_args.kwargs
-    assert call_kwargs["collections"] == ["sentinel-2"]
+    assert call_kwargs["collections"] == ["sentinel-2"]  # Passed as list internally
     assert call_kwargs["limit"] == 100
+
+
+@pytest.mark.asyncio
+async def test_ingest_api_collection_from_context():
+    """IngestModule uses collection_id from context when not in config (Matrix Strategy)."""
+    # Mock API client and search results
+    mock_client = MagicMock()
+    mock_search = MagicMock()
+    
+    test_items = [VALID_ITEM.copy()]
+    mock_search.items_as_dicts.return_value = iter(test_items)
+    mock_client.search.return_value = mock_search
+    
+    # Configure module WITHOUT collection_id
+    config = {
+        "mode": "api",
+        "source": "https://example.com/stac",
+        "limit": 100
+    }
+    
+    with patch('pystac_client.Client.open', return_value=mock_client):
+        module = IngestModule(config)
+        # Inject collection_id via context (as Matrix Strategy would)
+        context = MockWorkflowContext.create(data={'collection_id': 'landsat-8'})
+        
+        # Fetch items
+        results = [item async for item in module.fetch(context)]
+    
+    assert len(results) == 1
+    
+    # Verify collection_id was picked up from context
+    call_kwargs = mock_client.search.call_args.kwargs
+    assert call_kwargs["collections"] == ["landsat-8"]
+
+
+@pytest.mark.asyncio
+async def test_ingest_api_missing_collection_id():
+    """IngestModule raises error when collection_id not in config or context."""
+    mock_client = MagicMock()
+    
+    config = {
+        "mode": "api",
+        "source": "https://example.com/stac",
+    }
+    
+    from stac_manager.exceptions import ConfigurationError
+    with patch('pystac_client.Client.open', return_value=mock_client):
+        module = IngestModule(config)
+        context = MockWorkflowContext.create()  # No collection_id in context
+        
+        with pytest.raises(ConfigurationError, match="collection_id must be provided"):
+            _ = [item async for item in module.fetch(context)]

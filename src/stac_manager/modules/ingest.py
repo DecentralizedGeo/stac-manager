@@ -71,16 +71,22 @@ class IngestModule:
         """Fetch items from STAC API."""
         import pystac_client
         
+        # Resolve collection_id: Config overrides context (Matrix injection)
+        collection_id = self.config.collection_id or context.data.get('collection_id')
+        
+        if not collection_id:
+            raise ConfigurationError(
+                "collection_id must be provided in config or context.data for API mode"
+            )
+        
         # Open STAC API client
         client = pystac_client.Client.open(self.config.source)
         
         # Build search parameters
         search_params = {
+            "collections": [collection_id],  # Single collection as list
             "limit": self.config.limit,
         }
-        
-        if self.config.collections:
-            search_params["collections"] = self.config.collections
         
         if self.config.max_items:
             search_params["max_items"] = self.config.max_items
