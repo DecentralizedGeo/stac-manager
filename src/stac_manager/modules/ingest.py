@@ -69,5 +69,26 @@ class IngestModule:
     
     async def _fetch_from_api(self, context: WorkflowContext) -> AsyncIterator[dict]:
         """Fetch items from STAC API."""
-        # API mode implementation (Task 38)
-        raise NotImplementedError("API ingestion not yet implemented")
+        import pystac_client
+        
+        # Open STAC API client
+        client = pystac_client.Client.open(self.config.source)
+        
+        # Build search parameters
+        search_params = {
+            "limit": self.config.limit,
+        }
+        
+        if self.config.collections:
+            search_params["collections"] = self.config.collections
+        
+        if self.config.max_items:
+            search_params["max_items"] = self.config.max_items
+        
+        # Execute search
+        search = client.search(**search_params)
+        
+        # items_as_dicts() is a regular iterator, not async
+        # Wrap in async iterator for consistency
+        for item in search.items_as_dicts():
+            yield item

@@ -4,6 +4,7 @@ import json
 import pyarrow as pa
 import pyarrow.parquet as pq
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
 from tests.fixtures.context import MockWorkflowContext
 from tests.fixtures.stac_items import VALID_ITEM
 from stac_manager.modules.ingest import IngestModule
@@ -77,3 +78,41 @@ async def test_ingest_parquet_file_success(tmp_path):
     
     assert len(results) == 2
     assert results[0]["id"] == "test-item-001"
+
+
+@pytest.mark.asyncio
+async def test_ingest_api_search_success():
+    """IngestModule fetches items from STAC API."""
+    # Mock API client and search results
+    mock_client = MagicMock()
+    mock_search = MagicMock()
+    
+    # Mock items_as_dicts to return regular iterator (not async)
+    test_items = [VALID_ITEM.copy(), {**VALID_ITEM, "id": "test-item-002"}]
+    mock_search.items_as_dicts.return_value = iter(test_items)
+    mock_client.search.return_value = mock_search
+    
+    # Configure module for API mode
+    config = {
+        "mode": "api",
+        "source": "https://example.com/stac",
+        "collections": ["sentinel-2"],
+        "limit": 100
+    }
+    
+    with patch('pystac_client.Client.open', return_value=mock_client):
+        module = IngestModule(config)
+        context = MockWorkflowContext.create()
+        
+        # Fetch items
+        results = [item async for item in module.fetch(context)]
+    
+    assert len(results) == 2
+    assert results[0]["id"] == "test-item-001"
+    assert results[1]["id"] == "test-item-002"
+    
+    # Verify search was called with correct params
+    mock_client.search.assert_called_once()
+    call_kwargs = mock_client.search.call_args.kwargs
+    assert call_kwargs["collections"] == ["sentinel-2"]
+    assert call_kwargs["limit"] == 100
