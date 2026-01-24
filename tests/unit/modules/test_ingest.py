@@ -300,3 +300,32 @@ async def test_ingest_file_read_error():
         # Cleanup
         if os.path.exists(temp_file):
             os.remove(temp_file)
+
+
+def test_ingest_protocol_compliance():
+    """IngestModule implements Fetcher protocol."""
+    from stac_manager.protocols import Fetcher
+    import tempfile
+    import os
+
+    config = {
+        "mode": "file",
+        "source": "/tmp/items.json",
+        "format": "json"
+    }
+
+    # Create temp file with valid item
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+        json.dump([VALID_ITEM.copy()], f)
+        temp_file = f.name
+
+    try:
+        config["source"] = temp_file
+        module = IngestModule(config)
+
+        # Check protocol compliance
+        assert isinstance(module, Fetcher), "IngestModule must implement Fetcher protocol"
+        assert hasattr(module, 'fetch'), "IngestModule must have fetch method"
+        assert callable(module.fetch), "fetch must be callable"
+    finally:
+        os.unlink(temp_file)
