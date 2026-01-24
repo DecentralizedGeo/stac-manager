@@ -177,3 +177,22 @@ async def test_output_parquet(tmp_path):
     
     # Verify result
     assert result["items_written"] == 5
+
+
+def test_output_protocol_compliance(tmp_path):
+    """OutputModule implements Bundler protocol."""
+    from stac_manager.protocols import Bundler
+    
+    config = {
+        "format": "json",
+        "base_dir": str(tmp_path)
+    }
+    
+    module = OutputModule(config)
+    
+    # Check protocol compliance
+    assert isinstance(module, Bundler), "OutputModule must implement Bundler protocol"
+    assert hasattr(module, 'bundle'), "OutputModule must have bundle method"
+    assert callable(module.bundle), "bundle must be callable"
+    assert hasattr(module, 'finalize'), "OutputModule must have finalize method"
+    assert callable(module.finalize), "finalize must be callable"
