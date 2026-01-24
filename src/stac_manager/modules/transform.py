@@ -4,6 +4,7 @@ from pathlib import Path
 from stac_manager.modules.config import TransformConfig
 from stac_manager.core.context import WorkflowContext
 from stac_manager.exceptions import ConfigurationError
+from stac_manager.utils import apply_jmespath, deep_merge
 
 
 class TransformModule:
@@ -23,22 +24,66 @@ class TransformModule:
             with open(file_path, 'r') as f:
                 self.sidecar_data = json.load(f)
             
-            # For Task 28, the test expectation is that sidecar_index exists.
-            # I will initialize it even if not fully populated until Task 29/30.
-            # However, to pass test_transform_module_loads_json_sidecar,
-            # which asserts module.sidecar_index is not None, I'm good.
-            # Wait, the test I wrote asserts assert module.sidecar_index is not None.
-            # The plan's Step 1 code for test_transform_module_loads_json_sidecar:
-            # assert module.sidecar_index is not None
-            # assert len(module.sidecar_index) == 2
-            # My test also has: assert len(module.sidecar_index) == 2
-            # So I should populate sidecar_index if it's a simple list or dict.
-            
-            # Simple list indexing (fallback until Task 30 adds JMESPath)
-            if isinstance(self.sidecar_data, list):
-                # Basic ID matching if "id" exists
-                for item in self.sidecar_data:
-                    if "id" in item:
-                        self.sidecar_index[item["id"]] = item
-            elif isinstance(self.sidecar_data, dict):
+            # Build index
+            if isinstance(self.sidecar_data, dict):
+                # Dict: keys are IDs
                 self.sidecar_index = self.sidecar_data
+            elif isinstance(self.sidecar_data, list):
+                # List: extract IDs using jmespath
+                for entry in self.sidecar_data:
+                    item_id = apply_jmespath(entry, self.config.sidecar_id_path)
+                    if item_id:
+                        self.sidecar_index[str(item_id)] = entry
+            else:
+                raise ConfigurationError("input_file must be JSON dict or list")
+
+    def modify(self, item: dict, context: WorkflowContext) -> dict:
+        """
+        Enrich STAC item with sidecar data.
+        
+        Args:
+            item: STAC item dict
+            context: Workflow context
+            
+        Returns:
+            Enriched item dict
+        """
+        item_id = item.get("id")
+        if not item_id or item_id not in self.sidecar_index:
+            if self.config.handle_missing == 'warn':
+                context.failure_collector.add(
+                    item_id=item_id or "unknown",
+                    error=f"Missing sidecar data for item ID: {item_id}",
+                    step_id="transform"
+                )
+            elif self.config.handle_missing == 'error':
+                from stac_manager.exceptions import DataProcessingError
+                raise DataProcessingError(f"Missing sidecar data for item ID: {item_id}")
+            return item
+            
+        sidecar_entry = self.sidecar_index[item_id]
+        
+        # Apply field mapping if provided
+        if self.config.field_mapping:
+            sidecar_data = {}
+            for target_field, source_query in self.config.field_mapping.items():
+                val = apply_jmespath(sidecar_entry, source_query)
+                sidecar_data[target_field] = val
+        else:
+            sidecar_data = sidecar_entry
+        
+        # Determine merge strategy
+        # Transform 'merge' -> deep_merge 'keep_existing'
+        # Transform 'update' -> deep_merge 'overwrite'
+        merge_strategy = 'keep_existing' if self.config.strategy == 'merge' else 'overwrite'
+        
+        # Sidecar data is merged into item['properties'] by default
+        target = item.get("properties", {})
+        
+        item["properties"] = deep_merge(
+            target,
+            sidecar_data,
+            strategy=merge_strategy
+        )
+        
+        return item

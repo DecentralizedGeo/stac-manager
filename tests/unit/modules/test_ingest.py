@@ -247,3 +247,56 @@ async def test_ingest_api_filters_query():
     
     call_kwargs = mock_client.search.call_args.kwargs
     assert call_kwargs["query"] == query_filter
+
+
+@pytest.mark.asyncio
+async def test_ingest_api_connection_error():
+    """IngestModule raises DataProcessingError on connection failures."""
+    mock_client = MagicMock()
+    mock_client.search.side_effect = ConnectionError("Network unreachable")
+    
+    config = {
+        "mode": "api",
+        "source": "https://example.com/stac",
+        "collection_id": "test-collection"
+    }
+    
+    from stac_manager.exceptions import DataProcessingError
+    with patch('pystac_client.Client.open', return_value=mock_client):
+        module = IngestModule(config)
+        context = MockWorkflowContext.create()
+        
+        with pytest.raises(DataProcessingError, match="Network unreachable"):
+            _ = [item async for item in module.fetch(context)]
+
+
+@pytest.mark.asyncio
+async def test_ingest_file_read_error():
+    """IngestModule raises DataProcessingError on file read failures."""
+    # Create a file and then make it unreadable
+    import tempfile
+    import os
+    
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+        json.dump([VALID_ITEM], f)
+        temp_file = f.name
+    
+    try:
+        config = {
+            "mode": "file",
+            "source": temp_file,
+            "format": "json"
+        }
+        module = IngestModule(config)
+        context = MockWorkflowContext.create()
+        
+        # Make file unreadable by deleting it
+        os.remove(temp_file)
+        
+        from stac_manager.exceptions import DataProcessingError
+        with pytest.raises(DataProcessingError):
+            _ = [item async for item in module.fetch(context)]
+    finally:
+        # Cleanup
+        if os.path.exists(temp_file):
+            os.remove(temp_file)
