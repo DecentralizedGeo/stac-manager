@@ -30,7 +30,7 @@ class ExtensionConfig(BaseModel):
     """Configuration for ExtensionModule."""
     schema_uri: str
     defaults: Optional[Dict[str, Any]] = None
-    validate: bool = False
+    validate_extension: bool = False
     required_fields_only: bool = False
 
 

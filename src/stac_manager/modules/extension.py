@@ -1,7 +1,8 @@
 """Extension Module - STAC extension scaffolding."""
 import requests
-import pystac.extensions
-from typing import Any, Dict, Optional, List
+import pystac
+from pystac import EXTENSION_HOOKS
+from typing import Any
 from stac_manager.modules.config import ExtensionConfig
 from stac_manager.core.context import WorkflowContext
 from stac_manager.exceptions import ConfigurationError
@@ -18,9 +19,15 @@ class ExtensionModule:
         
         # Check if extension is registered with pystac
         try:
-            registered = pystac.extensions.RegisteredExtension.get_by_uri(self.config.schema_uri)
-            if registered:
+            # Check if schema_uri is directly registered
+            if self.config.schema_uri in EXTENSION_HOOKS.hooks:
                 self.is_registered = True
+            else:
+                # Check if schema_uri matches any previous extension IDs
+                for hook in EXTENSION_HOOKS.hooks.values():
+                    if self.config.schema_uri in hook.prev_extension_ids:
+                        self.is_registered = True
+                        break
         except Exception:
             pass
         
