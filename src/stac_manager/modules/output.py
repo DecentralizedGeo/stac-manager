@@ -64,7 +64,9 @@ class OutputModule:
             await self._flush_parquet(context)
     
     async def _flush_json(self, context: WorkflowContext) -> None:
-        """Write items as individual JSON files."""
+        """Write items as individual JSON files with atomic writes."""
+        import os
+        
         output_dir = Path(self.config.base_dir)
         
         # Create directory if missing
@@ -74,12 +76,23 @@ class OutputModule:
         for item in self.buffer:
             item_id = item.get("id", "unknown")
             item_path = output_dir / f"{item_id}.json"
+            temp_path = output_dir / f"{item_id}.json.tmp"
             
-            # Write JSON
-            content = json.dumps(item, indent=2)
-            await asyncio.to_thread(item_path.write_text, content)
-            
-            self.items_written += 1
+            try:
+                # Write to temp file
+                content = json.dumps(item, indent=2)
+                await asyncio.to_thread(temp_path.write_text, content)
+                
+                # Atomic rename
+                await asyncio.to_thread(os.replace, str(temp_path), str(item_path))
+                
+                self.items_written += 1
+                
+            except Exception as e:
+                # Clean up temp file on error
+                if temp_path.exists():
+                    await asyncio.to_thread(temp_path.unlink)
+                raise
         
         # Clear buffer
         self.buffer.clear()
