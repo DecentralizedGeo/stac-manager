@@ -40,25 +40,23 @@ class TransformConfig(BaseModel):
     strategy: Literal['merge', 'update'] = 'merge'
     sidecar_id_path: str = "id"
     data_path: Optional[str] = None
+    field_mapping: Optional[Dict[str, str]] = None
+    handle_missing: Literal['ignore', 'warn', 'error'] = 'ignore'
     schema_file: Optional[str] = None
     schema_mapping: Optional[Dict[str, Any]] = Field(alias='schema', default=None)
 
 
-class IngestFilters(BaseModel):
-    """Common filters for STAC API searches."""
-    bbox: Optional[List[float]] = None
-    datetime: Optional[str] = None
-    query: Optional[Dict[str, Any]] = None
-    ids: Optional[List[str]] = None
-
-
 class IngestConfig(BaseModel):
     """Configuration for IngestModule."""
-    catalog_url: Optional[str] = None
-    collection_id: Optional[str] = None
-    source_file: Optional[str] = None
-    concurrency: int = Field(default=10, ge=1)
-    filters: Optional[IngestFilters] = None
+    mode: Literal["file", "api"] = Field(description="Ingestion mode")
+    source: str = Field(description="File path or API URL")
+    format: Optional[Literal["json", "parquet"]] = Field(default="json", description="File format (file mode only)")
+    collections: Optional[List[str]] = Field(default=None, description="Collections to search (API mode)")
+    bbox: Optional[List[float]] = Field(default=None, description="Bounding box filter")
+    datetime: Optional[str] = Field(default=None, description="Datetime filter")
+    query: Optional[Dict[str, Any]] = Field(default=None, description="CQL query")
+    limit: Optional[int] = Field(default=100, description="Items per page")
+    max_items: Optional[int] = Field(default=None, description="Maximum items to fetch")
 
 
 class OutputConfig(BaseModel):
