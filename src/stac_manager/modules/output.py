@@ -99,5 +99,41 @@ class OutputModule:
     
     async def _flush_parquet(self, context: WorkflowContext) -> None:
         """Write items as Parquet file."""
-        # Parquet implementation (Task 48)
-        raise NotImplementedError("Parquet output not yet implemented")
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+        import os
+        from datetime import datetime
+        
+        if not self.buffer:
+            return
+        
+        output_dir = Path(self.config.base_dir)
+        
+        # Create directory if missing
+        await asyncio.to_thread(output_dir.mkdir, parents=True, exist_ok=True)
+        
+        # Generate filename with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        parquet_path = output_dir / f"items_{timestamp}.parquet"
+        temp_path = output_dir / f"items_{timestamp}.parquet.tmp"
+        
+        try:
+            # Convert items to Arrow Table
+            table = await asyncio.to_thread(pa.Table.from_pylist, self.buffer)
+            
+            # Write to temp file
+            await asyncio.to_thread(pq.write_table, table, str(temp_path))
+            
+            # Atomic rename
+            await asyncio.to_thread(os.replace, str(temp_path), str(parquet_path))
+            
+            self.items_written += len(self.buffer)
+            
+        except Exception:
+            # Clean up temp file on error
+            if temp_path.exists():
+                await asyncio.to_thread(temp_path.unlink)
+            raise
+        
+        # Clear buffer
+        self.buffer.clear()

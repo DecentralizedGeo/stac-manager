@@ -2,6 +2,7 @@
 import pytest
 import json
 import os
+import pyarrow.parquet as pq
 from pathlib import Path
 from unittest.mock import patch
 from tests.fixtures.context import MockWorkflowContext
@@ -136,3 +137,43 @@ async def test_output_buffering(tmp_path):
     await module.finalize(context)
     
     assert len(list(tmp_path.glob("*.json"))) == 5
+
+
+@pytest.mark.asyncio
+async def test_output_parquet(tmp_path):
+    """OutputModule writes items as Parquet file."""
+    config = {
+        "format": "parquet",
+        "base_dir": str(tmp_path),
+        "buffer_size": 10
+    }
+    
+    module = OutputModule(config)
+    context = MockWorkflowContext.create()
+    
+    # Bundle multiple items with non-empty assets (PyArrow requirement)
+    items = [
+        {
+            **VALID_ITEM, 
+            "id": f"item-{i}",
+            "assets": {"thumbnail": {"href": f"item-{i}.jpg"}}
+        }
+        for i in range(5)
+    ]
+    
+    for item in items:
+        await module.bundle(item, context)
+    
+    # Finalize
+    result = await module.finalize(context)
+    
+    # Verify Parquet file exists
+    parquet_files = list(tmp_path.glob("*.parquet"))
+    assert len(parquet_files) == 1
+    
+    # Verify content
+    table = pq.read_table(str(parquet_files[0]))
+    assert len(table) == 5
+    
+    # Verify result
+    assert result["items_written"] == 5
