@@ -168,3 +168,82 @@ async def test_ingest_api_missing_collection_id():
         
         with pytest.raises(ConfigurationError, match="collection_id must be provided"):
             _ = [item async for item in module.fetch(context)]
+
+
+@pytest.mark.asyncio
+async def test_ingest_api_filters_bbox():
+    """IngestModule passes bbox filter to API search."""
+    mock_client = MagicMock()
+    mock_search = MagicMock()
+    
+    test_items = [VALID_ITEM.copy()]
+    mock_search.items_as_dicts.return_value = iter(test_items)
+    mock_client.search.return_value = mock_search
+    
+    config = {
+        "mode": "api",
+        "source": "https://example.com/stac",
+        "collection_id": "test-collection",
+        "bbox": [-180, -90, 180, 90]
+    }
+    
+    with patch('pystac_client.Client.open', return_value=mock_client):
+        module = IngestModule(config)
+        context = MockWorkflowContext.create()
+        _ = [item async for item in module.fetch(context)]
+    
+    call_kwargs = mock_client.search.call_args.kwargs
+    assert call_kwargs["bbox"] == [-180, -90, 180, 90]
+
+
+@pytest.mark.asyncio
+async def test_ingest_api_filters_datetime():
+    """IngestModule passes datetime filter to API search."""
+    mock_client = MagicMock()
+    mock_search = MagicMock()
+    
+    test_items = [VALID_ITEM.copy()]
+    mock_search.items_as_dicts.return_value = iter(test_items)
+    mock_client.search.return_value = mock_search
+    
+    config = {
+        "mode": "api",
+        "source": "https://example.com/stac",
+        "collection_id": "test-collection",
+        "datetime": "2023-01-01/2023-12-31"
+    }
+    
+    with patch('pystac_client.Client.open', return_value=mock_client):
+        module = IngestModule(config)
+        context = MockWorkflowContext.create()
+        _ = [item async for item in module.fetch(context)]
+    
+    call_kwargs = mock_client.search.call_args.kwargs
+    assert call_kwargs["datetime"] == "2023-01-01/2023-12-31"
+
+
+@pytest.mark.asyncio
+async def test_ingest_api_filters_query():
+    """IngestModule passes CQL query filter to API search."""
+    mock_client = MagicMock()
+    mock_search = MagicMock()
+    
+    test_items = [VALID_ITEM.copy()]
+    mock_search.items_as_dicts.return_value = iter(test_items)
+    mock_client.search.return_value = mock_search
+    
+    query_filter = {"eo:cloud_cover": {"lt": 10}}
+    config = {
+        "mode": "api",
+        "source": "https://example.com/stac",
+        "collection_id": "test-collection",
+        "query": query_filter
+    }
+    
+    with patch('pystac_client.Client.open', return_value=mock_client):
+        module = IngestModule(config)
+        context = MockWorkflowContext.create()
+        _ = [item async for item in module.fetch(context)]
+    
+    call_kwargs = mock_client.search.call_args.kwargs
+    assert call_kwargs["query"] == query_filter

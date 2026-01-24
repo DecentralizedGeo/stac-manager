@@ -91,6 +91,16 @@ class IngestModule:
         if self.config.max_items:
             search_params["max_items"] = self.config.max_items
         
+        # Add filter parameters
+        if self.config.bbox:
+            search_params["bbox"] = self.config.bbox
+        
+        if self.config.datetime:
+            search_params["datetime"] = self.config.datetime
+        
+        if self.config.query:
+            search_params["query"] = self.config.query
+        
         # Execute search
         search = client.search(**search_params)
         
