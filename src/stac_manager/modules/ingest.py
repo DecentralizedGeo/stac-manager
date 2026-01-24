@@ -1,4 +1,57 @@
-"""Ingest Module - Fetch STAC Items from files or APIs."""
+"""Ingest Module - Fetch STAC Items from files or APIs.
+
+This module provides the IngestModule class for loading STAC items from various sources
+including local JSON/Parquet files and remote STAC API endpoints.
+
+Example:
+    Basic file ingestion::
+
+        from stac_manager.modules.ingest import IngestModule
+        from stac_manager.core.context import WorkflowContext
+        
+        # Load from JSON file
+        config = {
+            "mode": "file",
+            "source": "items.json",
+            "format": "json"
+        }
+        ingest = IngestModule(config)
+        
+        context = WorkflowContext.create()
+        async for item in ingest.fetch(context):
+            print(f"Loaded item: {item['id']}")
+    
+    API ingestion with filters::
+
+        # Load from STAC API
+        config = {
+            "mode": "api",
+            "source": "https://earth-search.aws.element84.com/v1",
+            "collection_id": "sentinel-2-l2a",
+            "bbox": [-122.5, 37.5, -122.0, 38.0],
+            "datetime": "2024-01-01/2024-01-31",
+            "query": {"eo:cloud_cover": {"lt": 10}},
+            "limit": 100
+        }
+        ingest = IngestModule(config)
+        
+        async for item in ingest.fetch(context):
+            process_item(item)
+
+Configuration:
+    mode (str): Source mode - "file" or "api"
+    source (str): File path (for file mode) or API URL (for api mode)
+    format (str): File format - "json" or "parquet" (file mode only)
+    collection_id (str, optional): STAC collection ID (api mode)
+    bbox (list, optional): Bounding box filter [west, south, east, north]
+    datetime (str, optional): Datetime filter (RFC 3339 or range)
+    query (dict, optional): Additional query parameters
+    limit (int, optional): Maximum items to fetch (default: 100)
+
+See Also:
+    - IngestConfig: Pydantic configuration model
+    - Fetcher: Protocol interface implemented by this module
+"""
 import json
 import asyncio
 from pathlib import Path
@@ -10,10 +63,54 @@ from stac_manager.exceptions import ConfigurationError
 
 
 class IngestModule:
-    """Fetches STAC Items from local files or remote APIs."""
+    """Fetches STAC Items from local files or remote APIs.
+    
+    This module implements the Fetcher protocol and supports multiple ingestion modes:
+    - File mode: Load items from local JSON or Parquet files
+    - API mode: Fetch items from STAC API /search endpoints with filtering
+    
+    The module performs automatic format detection for JSON files (list or FeatureCollection),
+    handles pagination for API requests, and collects failures in the workflow context.
+    
+    Attributes:
+        config (IngestConfig): Validated configuration parameters
+    
+    Examples:
+        Load from JSON file::
+
+            ingest = IngestModule({
+                "mode": "file",
+                "source": "data/items.json",
+                "format": "json"
+            })
+            
+            async for item in ingest.fetch(context):
+                print(item['id'])
+        
+        Fetch from STAC API with filters::
+
+            ingest = IngestModule({
+                "mode": "api",
+                "source": "https://api.stac.com/v1",
+                "collection_id": "my-collection",
+                "bbox": [-180, -90, 180, 90],
+                "limit": 50
+            })
+            
+            async for item in ingest.fetch(context):
+                process(item)
+    """
     
     def __init__(self, config: dict) -> None:
-        """Initialize with configuration."""
+        """Initialize IngestModule with configuration.
+        
+        Args:
+            config: Configuration dictionary matching IngestConfig schema
+        
+        Raises:
+            ConfigurationError: If file source doesn't exist (file mode)
+            ValidationError: If config doesn't match IngestConfig schema
+        """
         self.config = IngestConfig(**config)
         
         # Validate file exists for file mode
@@ -23,14 +120,32 @@ class IngestModule:
                 raise ConfigurationError(f"File not found: {self.config.source}")
     
     async def fetch(self, context: WorkflowContext) -> AsyncIterator[dict]:
-        """
-        Fetch items from configured source.
+        """Fetch STAC items from configured source.
+        
+        This async generator yields items one at a time, allowing for streaming
+        processing of large datasets. For file sources, reads the entire file
+        into memory. For API sources, handles pagination automatically.
         
         Args:
-            context: Workflow context
+            context: Workflow context with failure collector and state
         
         Yields:
-            STAC item dicts
+            dict: STAC Item dictionaries conforming to STAC specification
+        
+        Raises:
+            DataProcessingError: On file read errors, API errors, or parsing failures
+        
+        Example:
+            ::
+
+                context = WorkflowContext.create()
+                ingest = IngestModule(config)
+                
+                items = []
+                async for item in ingest.fetch(context):
+                    items.append(item)
+                
+                print(f"Loaded {len(items)} items")
         """
         if self.config.mode == "file":
             async for item in self._fetch_from_file():
