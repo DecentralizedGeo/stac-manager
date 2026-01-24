@@ -53,9 +53,19 @@ class IngestModule:
             
             for item in items:
                 yield item
+                
         elif self.config.format == "parquet":
-            # Parquet handling (Task 37)
-            raise NotImplementedError("Parquet ingestion not yet implemented")
+            # Read Parquet file
+            import pyarrow.parquet as pq
+            
+            source_path = Path(self.config.source)
+            # Use thread pool for blocking I/O
+            table = await asyncio.to_thread(pq.read_table, str(source_path))
+            
+            # Convert to dicts and yield
+            items = table.to_pylist()
+            for item in items:
+                yield item
     
     async def _fetch_from_api(self, context: WorkflowContext) -> AsyncIterator[dict]:
         """Fetch items from STAC API."""
