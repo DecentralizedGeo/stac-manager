@@ -1,4 +1,70 @@
-"""Output Module - Write STAC Items to disk."""
+"""Output Module - Write STAC Items to disk in self-contained collection structure.
+
+This module provides the OutputModule class for writing STAC items to disk in a 
+STAC-compliant collection structure with relative hrefs for self-contained catalogs.
+
+Example:
+    Basic JSON output::
+
+        from stac_manager.modules.output import OutputModule
+        from stac_manager.core.context import WorkflowContext
+        
+        config = {
+            "format": "json",
+            "base_dir": "/data/output",
+            "buffer_size": 10
+        }
+        output = OutputModule(config)
+        
+        context = WorkflowContext.create()
+        
+        # Process items
+        for item in items:
+            await output.bundle(item, context)
+        
+        # Flush remaining buffer
+        result = await output.finalize(context)
+        print(f"Wrote {result['items_written']} items")
+    
+    Parquet output with collection::
+
+        config = {
+            "format": "parquet",
+            "base_dir": "/data/output",
+            "buffer_size": 100
+        }
+        output = OutputModule(config)
+        
+        # Items will be written to:
+        # base_dir/collection_id/items/*.parquet
+
+Directory Structure:
+    Output follows STAC best practices for self-contained collections::
+
+        base_dir/
+        └── {collection_id}/
+            ├── collection.json         # Auto-generated collection metadata
+            └── items/
+                ├── item-001.json       # Individual item files (JSON mode)
+                ├── item-002.json
+                └── batch-*.parquet     # Or batch files (Parquet mode)
+    
+    Each item includes relative links:
+    - self: ./items/{id}.json
+    - parent: ../collection.json
+    - collection: ../collection.json
+
+Configuration:
+    format (str): Output format - "json" or "parquet"
+    base_dir (str): Base directory for output collections
+    buffer_size (int, optional): Items to buffer before writing (default: 10)
+    base_url (str, optional): Base URL for absolute hrefs in links
+    include_collection (bool, optional): Whether to create collection.json (default: True)
+
+See Also:
+    - OutputConfig: Pydantic configuration model
+    - Bundler: Protocol interface implemented by this module
+"""
 import json
 import asyncio
 from pathlib import Path
@@ -6,14 +72,67 @@ from typing import Optional
 
 from stac_manager.modules.config import OutputConfig
 from stac_manager.core.context import WorkflowContext
-from stac_manager.exceptions import ConfigurationError
 
 
 class OutputModule:
-    """Writes STAC Items to JSON or Parquet files in STAC collection structure."""
+    """Writes STAC Items to JSON or Parquet files in STAC collection structure.
+    
+    This module implements the Bundler protocol and provides:
+    - Self-contained STAC collection structure with collection.json
+    - Relative hrefs for portable catalogs
+    - Automatic collection creation on first item
+    - Buffered writes for performance
+    - Atomic file operations to prevent corruption
+    - Support for both JSON (per-item) and Parquet (batched) formats
+    
+    The output structure follows STAC best practices where each collection is a
+    self-contained directory with collection.json and items in a subdirectory.
+    
+    Attributes:
+        config (OutputConfig): Validated configuration
+        buffer (list[dict]): Items waiting to be written
+        items_written (int): Total count of items written
+        collection_id (str | None): Current collection identifier
+        collection_created (bool): Whether collection.json has been created
+    
+    Examples:
+        Write items with automatic flush::
+
+            output = OutputModule({
+                "format": "json",
+                "base_dir": "output",
+                "buffer_size": 5
+            })
+            
+            for item in items:
+                await output.bundle(item, context)  # Auto-flushes at buffer_size
+            
+            await output.finalize(context)  # Flush remaining
+        
+        Large batch with Parquet::
+
+            output = OutputModule({
+                "format": "parquet",
+                "base_dir": "output",
+                "buffer_size": 1000  # Larger buffer for efficiency
+            })
+            
+            async for item in fetch_items():
+                await output.bundle(item, context)
+            
+            result = await output.finalize(context)
+            print(f"Wrote {result['items_written']} items")
+    """
     
     def __init__(self, config: dict) -> None:
-        """Initialize with configuration."""
+        """Initialize OutputModule with configuration.
+        
+        Args:
+            config: Configuration dictionary matching OutputConfig schema
+        
+        Raises:
+            ValidationError: If config doesn't match OutputConfig schema
+        """
         self.config = OutputConfig(**config)
         self.buffer: list[dict] = []
         self.items_written = 0
@@ -21,15 +140,31 @@ class OutputModule:
         self.collection_created = False
     
     async def bundle(self, item: dict, context: WorkflowContext) -> None:
-        """
-        Accept a single item for bundling.
+        """Accept a single item for bundling/output.
         
-        Items are buffered and flushed when buffer_size is reached.
-        Creates collection.json on first item if not already created.
+        Items are buffered in memory and flushed to disk when the buffer reaches
+        configured size or on finalize(). Creates collection.json automatically
+        on the first item if it doesn't exist.
+        
+        The item is modified to include relative self/parent/collection links
+        before buffering.
         
         Args:
-            item: STAC item dict
-            context: Workflow context
+            item: STAC item dictionary to write
+            context: Workflow context with failure collector
+        
+        Raises:
+            DataProcessingError: If writing fails (added to failure collector)
+        
+        Example:
+            ::
+
+                output = OutputModule(config)
+                
+                for item in items:
+                    await output.bundle(item, context)
+                
+                # Buffer automatically flushes at buffer_size
         """
         # Extract collection_id from first item or context
         if self.collection_id is None:
