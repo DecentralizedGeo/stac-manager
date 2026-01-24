@@ -101,3 +101,38 @@ async def test_output_atomic_write(tmp_path):
     assert src.endswith('.tmp')
     assert dst.endswith('.json')
     assert not dst.endswith('.tmp.json')
+
+
+@pytest.mark.asyncio
+async def test_output_buffering(tmp_path):
+    """OutputModule buffers items and flushes at threshold."""
+    config = {
+        "format": "json",
+        "base_dir": str(tmp_path),
+        "buffer_size": 3  # Small buffer for testing
+    }
+    
+    module = OutputModule(config)
+    context = MockWorkflowContext.create()
+    
+    # Add 2 items - should not write yet
+    await module.bundle({**VALID_ITEM, "id": "item-1"}, context)
+    await module.bundle({**VALID_ITEM, "id": "item-2"}, context)
+    
+    assert len(list(tmp_path.glob("*.json"))) == 0
+    
+    # Add 3rd item - should trigger flush
+    await module.bundle({**VALID_ITEM, "id": "item-3"}, context)
+    
+    assert len(list(tmp_path.glob("*.json"))) == 3
+    
+    # Add 2 more items - should not write yet
+    await module.bundle({**VALID_ITEM, "id": "item-4"}, context)
+    await module.bundle({**VALID_ITEM, "id": "item-5"}, context)
+    
+    assert len(list(tmp_path.glob("*.json"))) == 3
+    
+    # Finalize - should flush remaining
+    await module.finalize(context)
+    
+    assert len(list(tmp_path.glob("*.json"))) == 5
