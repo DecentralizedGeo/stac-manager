@@ -27,8 +27,9 @@ def test_validate_module_rejects_invalid_item():
     result = module.modify(invalid_item, context)
     
     assert result is None
-    assert len(context.failure_collector.failures) == 1
-    assert "validation" in context.failure_collector.failures[0]["error"].lower()
+    failures = context.failure_collector.get_all()
+    assert len(failures) == 1
+    assert "validation" in failures[0].message.lower()
 
 
 def test_validate_module_strict_mode_raises():

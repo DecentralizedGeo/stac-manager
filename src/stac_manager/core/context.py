@@ -2,6 +2,7 @@
 from dataclasses import dataclass
 from typing import Any
 import logging
+from stac_manager.core.failures import FailureCollector
 
 
 @dataclass
@@ -10,7 +11,7 @@ class WorkflowContext:
     workflow_id: str
     config: dict
     logger: logging.Logger
-    failure_collector: 'FailureCollector'
+    failure_collector: FailureCollector
     checkpoints: 'CheckpointManager'
     data: dict[str, Any]
     

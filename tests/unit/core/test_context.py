@@ -1,7 +1,8 @@
 import pytest
 import logging
 from stac_manager.core.context import WorkflowContext
-from tests.fixtures.context import MockFailureCollector, MockCheckpointManager
+from stac_manager.core.failures import FailureCollector
+from tests.fixtures.context import MockCheckpointManager
 
 
 def test_workflow_context_creation():
@@ -10,7 +11,7 @@ def test_workflow_context_creation():
         workflow_id="test-001",
         config={"name": "test"},
         logger=logging.getLogger("test"),
-        failure_collector=MockFailureCollector(),
+        failure_collector=FailureCollector(),
         checkpoints=MockCheckpointManager(),
         data={"collection_id": "test-collection"}
     )
@@ -18,9 +19,6 @@ def test_workflow_context_creation():
     assert ctx.workflow_id == "test-001"
     assert ctx.config["name"] == "test"
     assert ctx.data["collection_id"] == "test-collection"
-
-
-from stac_manager.core.failures import FailureCollector, FailureRecord
 
 
 def test_failure_collector_add():
