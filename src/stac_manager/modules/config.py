@@ -61,6 +61,8 @@ class IngestConfig(BaseModel):
 
 class OutputConfig(BaseModel):
     """Configuration for OutputModule."""
-    base_dir: str
-    format: Literal['json', 'parquet'] = 'json'
-    base_url: Optional[str] = Field(alias='BASE_URL', default=None)
+    format: Literal["json", "parquet"] = Field(description="Output format")
+    base_dir: str = Field(description="Base output directory")
+    buffer_size: int = Field(default=1000, description="Items to buffer before flushing")
+    base_url: Optional[str] = Field(default=None, description="Base URL for item links")
+    include_collection: bool = Field(default=False, description="Write collection.json")

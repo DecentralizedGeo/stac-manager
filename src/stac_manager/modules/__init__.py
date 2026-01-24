@@ -4,6 +4,7 @@ from stac_manager.modules.update import UpdateModule
 from stac_manager.modules.validate import ValidateModule
 from stac_manager.modules.extension import ExtensionModule
 from stac_manager.modules.ingest import IngestModule
+from stac_manager.modules.output import OutputModule
 
 __all__ = [
     'SeedModule',
@@ -11,4 +12,5 @@ __all__ = [
     'ValidateModule',
     'ExtensionModule',
     'IngestModule',
+    'OutputModule',
 ]
