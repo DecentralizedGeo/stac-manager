@@ -174,3 +174,44 @@ def test_build_execution_order_no_dependencies():
     order = build_execution_order(steps)
     
     assert order == ["only_step"]
+
+
+def test_build_execution_order_detects_simple_cycle():
+    """Test cycle detection for simple A -> B -> A cycle."""
+    steps = [
+        StepConfig(id="step_a", module="UpdateModule", config={}, depends_on=["step_b"]),
+        StepConfig(id="step_b", module="TransformModule", config={}, depends_on=["step_a"])
+    ]
+    
+    with pytest.raises(ConfigurationError) as exc_info:
+        build_execution_order(steps)
+    
+    assert "circular dependency" in str(exc_info.value).lower()
+
+
+def test_build_execution_order_detects_complex_cycle():
+    """Test cycle detection for longer cycle A -> B -> C -> A."""
+    steps = [
+        StepConfig(id="step_a", module="IngestModule", config={}, depends_on=["step_c"]),
+        StepConfig(id="step_b", module="TransformModule", config={}, depends_on=["step_a"]),
+        StepConfig(id="step_c", module="UpdateModule", config={}, depends_on=["step_b"])
+    ]
+    
+    with pytest.raises(ConfigurationError) as exc_info:
+        build_execution_order(steps)
+    
+    assert "circular dependency" in str(exc_info.value).lower()
+
+
+def test_build_execution_order_missing_dependency():
+    """Test error when step depends on non-existent step."""
+    steps = [
+        StepConfig(id="step1", module="IngestModule", config={}),
+        StepConfig(id="step2", module="OutputModule", config={}, depends_on=["nonexistent"])
+    ]
+    
+    with pytest.raises(ConfigurationError) as exc_info:
+        build_execution_order(steps)
+    
+    assert "unknown step" in str(exc_info.value).lower()
+    assert "nonexistent" in str(exc_info.value)
