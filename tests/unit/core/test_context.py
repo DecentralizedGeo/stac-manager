@@ -1,7 +1,10 @@
 import pytest
 import logging
+from pathlib import Path
+import tempfile
 from stac_manager.core.context import WorkflowContext
 from stac_manager.core.failures import FailureCollector
+from stac_manager.core.checkpoints import CheckpointManager
 from tests.fixtures.context import MockCheckpointManager
 
 
@@ -55,4 +58,55 @@ def test_failure_collector_with_exception():
     assert len(failures) == 1
     assert failures[0].error_type == "ValueError"
     assert "Test error" in failures[0].message
+
+
+def test_workflow_context_with_checkpoint_manager():
+    """Test WorkflowContext includes CheckpointManager."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        checkpoint_manager = CheckpointManager(
+            directory=Path(tmpdir),
+            workflow_id="test-workflow",
+            step_id="step1"
+        )
+        
+        context = WorkflowContext(
+            workflow_id="test-workflow",
+            config={},
+            logger=logging.getLogger("test"),
+            failure_collector=FailureCollector(),
+            checkpoints=checkpoint_manager,
+            data={}
+        )
+        
+        assert context.checkpoints is checkpoint_manager
+        assert isinstance(context.checkpoints, CheckpointManager)
+
+
+def test_workflow_context_fork_shares_checkpoint_manager():
+    """Test that forked contexts share the same CheckpointManager."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        checkpoint_manager = CheckpointManager(
+            directory=Path(tmpdir),
+            workflow_id="test-workflow",
+            step_id="step1"
+        )
+        
+        parent_context = WorkflowContext(
+            workflow_id="test-workflow",
+            config={},
+            logger=logging.getLogger("test"),
+            failure_collector=FailureCollector(),
+            checkpoints=checkpoint_manager,
+            data={"parent_key": "parent_value"}
+        )
+        
+        # Fork context
+        child_context = parent_context.fork(data={"child_key": "child_value"})
+        
+        # Should share same checkpoint manager
+        assert child_context.checkpoints is parent_context.checkpoints
+        
+        # Should have merged data
+        assert child_context.data["parent_key"] == "parent_value"
+        assert child_context.data["child_key"] == "child_value"
 
