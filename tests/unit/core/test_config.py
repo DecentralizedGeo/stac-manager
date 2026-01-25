@@ -215,3 +215,21 @@ def test_build_execution_order_missing_dependency():
     
     assert "unknown step" in str(exc_info.value).lower()
     assert "nonexistent" in str(exc_info.value)
+
+
+def test_build_execution_order_reports_cycle_path():
+    """Test that cycle detection identifies the cyclic path."""
+    steps = [
+        StepConfig(id="step_a", module="IngestModule", config={}, depends_on=["step_c"]),
+        StepConfig(id="step_b", module="TransformModule", config={}, depends_on=["step_a"]),
+        StepConfig(id="step_c", module="UpdateModule", config={}, depends_on=["step_b"])
+    ]
+    
+    with pytest.raises(ConfigurationError) as exc_info:
+        build_execution_order(steps)
+    
+    error_msg = str(exc_info.value)
+    # Should contain all steps in the cycle
+    assert "step_a" in error_msg
+    assert "step_b" in error_msg
+    assert "step_c" in error_msg

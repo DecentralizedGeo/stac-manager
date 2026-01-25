@@ -103,7 +103,58 @@ def build_execution_order(steps: list[StepConfig]) -> list[str]:
     
     # Verify all steps processed (no cycles)
     if len(execution_order) != len(steps):
-        # Find cycle for better error message (simplified detection)
-        raise ConfigurationError("Circular dependency detected in workflow steps")
+        # Find cycle using DFS
+        remaining = set(step_map.keys()) - set(execution_order)
+        cycle_path = _find_cycle(remaining, step_map)
+        raise ConfigurationError(
+            f"Circular dependency detected: {' -> '.join(cycle_path)}"
+        )
     
     return execution_order
+
+
+def _find_cycle(remaining_steps: set[str], step_map: dict[str, StepConfig]) -> list[str]:
+    """
+    Find a cycle in the remaining steps using DFS.
+    
+    Args:
+        remaining_steps: Set of step IDs not yet processed
+        step_map: Mapping of step ID to StepConfig
+        
+    Returns:
+        List of step IDs forming a cycle
+    """
+    visited = set()
+    rec_stack = []
+    
+    def dfs(step_id: str) -> list[str] | None:
+        if step_id in rec_stack:
+            # Found cycle - return path from cycle start
+            cycle_start = rec_stack.index(step_id)
+            return rec_stack[cycle_start:] + [step_id]
+        
+        if step_id in visited:
+            return None
+        
+        visited.add(step_id)
+        rec_stack.append(step_id)
+        
+        # Explore dependencies
+        step = step_map[step_id]
+        for dep_id in step.depends_on:
+            if dep_id in remaining_steps:
+                cycle = dfs(dep_id)
+                if cycle:
+                    return cycle
+        
+        rec_stack.pop()
+        return None
+    
+    # Start DFS from any remaining step
+    for step_id in remaining_steps:
+        if step_id not in visited:
+            cycle = dfs(step_id)
+            if cycle:
+                return cycle
+    
+    return ["unknown"]  # Fallback (should not reach)
