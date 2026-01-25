@@ -2,7 +2,13 @@
 import pytest
 from pathlib import Path
 import tempfile
-from stac_manager.core.config import WorkflowDefinition, StepConfig, StrategyConfig, load_workflow_from_yaml
+from stac_manager.core.config import (
+    WorkflowDefinition,
+    StepConfig,
+    StrategyConfig,
+    load_workflow_from_yaml,
+    build_execution_order
+)
 from stac_manager.exceptions import ConfigurationError
 
 
@@ -121,3 +127,50 @@ def test_load_workflow_from_yaml_file_not_found():
         load_workflow_from_yaml(Path("/nonexistent/workflow.yaml"))
     
     assert "not found" in str(exc_info.value).lower()
+
+
+def test_build_execution_order_linear():
+    """Test DAG resolution for simple linear pipeline."""
+    steps = [
+        StepConfig(id="step1", module="IngestModule", config={}),
+        StepConfig(id="step2", module="UpdateModule", config={}, depends_on=["step1"]),
+        StepConfig(id="step3", module="OutputModule", config={}, depends_on=["step2"])
+    ]
+    
+    order = build_execution_order(steps)
+    
+    assert order == ["step1", "step2", "step3"]
+
+
+def test_build_execution_order_parallel_branches():
+    """Test DAG resolution with parallel branches that converge."""
+    steps = [
+        StepConfig(id="ingest", module="IngestModule", config={}),
+        StepConfig(id="transform_a", module="TransformModule", config={}, depends_on=["ingest"]),
+        StepConfig(id="transform_b", module="UpdateModule", config={}, depends_on=["ingest"]),
+        StepConfig(id="validate", module="ValidateModule", config={}, depends_on=["transform_a", "transform_b"]),
+        StepConfig(id="output", module="OutputModule", config={}, depends_on=["validate"])
+    ]
+    
+    order = build_execution_order(steps)
+    
+    # Verify ordering constraints
+    assert order.index("ingest") < order.index("transform_a")
+    assert order.index("ingest") < order.index("transform_b")
+    assert order.index("transform_a") < order.index("validate")
+    assert order.index("transform_b") < order.index("validate")
+    assert order.index("validate") < order.index("output")
+    
+    # Verify all steps included
+    assert set(order) == {"ingest", "transform_a", "transform_b", "validate", "output"}
+
+
+def test_build_execution_order_no_dependencies():
+    """Test single step with no dependencies."""
+    steps = [
+        StepConfig(id="only_step", module="IngestModule", config={})
+    ]
+    
+    order = build_execution_order(steps)
+    
+    assert order == ["only_step"]
