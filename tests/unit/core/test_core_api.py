@@ -26,3 +26,11 @@ def test_core_imports():
     # Verify functions are callable
     assert callable(load_workflow_from_yaml)
     assert callable(build_execution_order)
+
+
+def test_checkpoint_manager_import():
+    """Test CheckpointManager is importable from stac_manager.core."""
+    from stac_manager.core import CheckpointManager, CheckpointRecord
+    
+    assert CheckpointManager is not None
+    assert CheckpointRecord is not None

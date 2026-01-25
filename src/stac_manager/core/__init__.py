@@ -1,6 +1,7 @@
 """Core orchestration components."""
 from stac_manager.core.context import WorkflowContext
 from stac_manager.core.failures import FailureCollector, FailureRecord
+from stac_manager.core.checkpoints import CheckpointManager, CheckpointRecord
 from stac_manager.core.config import (
     WorkflowDefinition,
     StepConfig,
@@ -13,6 +14,8 @@ __all__ = [
     'WorkflowContext',
     'FailureCollector',
     'FailureRecord',
+    'CheckpointManager',
+    'CheckpointRecord',
     'WorkflowDefinition',
     'StepConfig',
     'StrategyConfig',
