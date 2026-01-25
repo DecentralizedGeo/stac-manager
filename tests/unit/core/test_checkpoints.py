@@ -142,3 +142,116 @@ def test_checkpoint_save_creates_parquet_file():
         assert len(df) == 1
         assert df.iloc[0]["item_id"] == "item-1"
         assert df.iloc[0]["status"] == "success"
+
+
+def test_checkpoint_resume_from_existing_state():
+    """Test CheckpointManager loads existing checkpoints on initialization."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        checkpoint_dir = Path(tmpdir)
+        workflow_id = "resume-workflow"
+        step_id = "step1"
+        
+        # First manager: Save some checkpoints
+        manager1 = CheckpointManager(
+            directory=checkpoint_dir,
+            workflow_id=workflow_id,
+            step_id=step_id
+        )
+        
+        records = [
+            CheckpointRecord(
+                item_id=f"item-{i}",
+                step_id=step_id,
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                status="success"
+            )
+            for i in range(10)
+        ]
+        
+        manager1.save(records)
+        
+        # Verify first manager knows about items
+        assert manager1.contains("item-5")
+        
+        # Second manager: Should load existing state
+        manager2 = CheckpointManager(
+            directory=checkpoint_dir,
+            workflow_id=workflow_id,
+            step_id=step_id
+        )
+        
+        # Should contain all previously saved items
+        for i in range(10):
+            assert manager2.contains(f"item-{i}")
+        
+        # Should not contain unsaved items
+        assert not manager2.contains("item-99")
+
+
+def test_checkpoint_resume_with_multiple_partitions():
+    """Test CheckpointManager loads from multiple partition files."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        manager = CheckpointManager(
+            directory=Path(tmpdir),
+            workflow_id="multi-partition",
+            step_id="step1"
+        )
+        
+        # Save multiple batches (creates multiple partitions)
+        for batch_num in range(3):
+            records = [
+                CheckpointRecord(
+                    item_id=f"batch{batch_num}-item-{i}",
+                    step_id="step1",
+                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    status="success"
+                )
+                for i in range(5)
+            ]
+            manager.save(records)
+        
+        # New manager should load all partitions
+        manager_new = CheckpointManager(
+            directory=Path(tmpdir),
+            workflow_id="multi-partition",
+            step_id="step1"
+        )
+        
+        # Verify all items from all batches
+        for batch_num in range(3):
+            for i in range(5):
+                assert manager_new.contains(f"batch{batch_num}-item-{i}")
+
+
+def test_checkpoint_handles_duplicate_items():
+    """Test CheckpointManager deduplicates item IDs across partitions."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        manager = CheckpointManager(
+            directory=Path(tmpdir),
+            workflow_id="dedup-test",
+            step_id="step1"
+        )
+        
+        # Save same item ID in multiple batches
+        for _ in range(3):
+            records = [
+                CheckpointRecord(
+                    item_id="duplicate-item",
+                    step_id="step1",
+                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    status="success"
+                )
+            ]
+            manager.save(records)
+        
+        # Should still contain only once
+        assert manager.contains("duplicate-item")
+        
+        # Reload and verify deduplication
+        manager_new = CheckpointManager(
+            directory=Path(tmpdir),
+            workflow_id="dedup-test",
+            step_id="step1"
+        )
+        
+        assert manager_new.contains("duplicate-item")
