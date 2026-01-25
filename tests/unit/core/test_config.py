@@ -233,3 +233,64 @@ def test_build_execution_order_reports_cycle_path():
     assert "step_a" in error_msg
     assert "step_b" in error_msg
     assert "step_c" in error_msg
+
+
+def test_workflow_definition_with_matrix_strategy():
+    """Test WorkflowDefinition with matrix strategy."""
+    workflow = WorkflowDefinition(
+        name="multi-collection-workflow",
+        strategy=StrategyConfig(
+            matrix=[
+                {"collection_id": "landsat-c2-l2"},
+                {"collection_id": "sentinel-2-l2a"}
+            ]
+        ),
+        steps=[
+            StepConfig(id="ingest", module="IngestModule", config={})
+        ]
+    )
+    
+    assert workflow.strategy.matrix is not None
+    assert len(workflow.strategy.matrix) == 2
+    assert workflow.strategy.matrix[0]["collection_id"] == "landsat-c2-l2"
+    assert workflow.strategy.matrix[1]["collection_id"] == "sentinel-2-l2a"
+
+
+def test_load_workflow_with_matrix_from_yaml():
+    """Test loading workflow with matrix strategy from YAML."""
+    yaml_content = """
+name: matrix-workflow
+
+strategy:
+  matrix:
+    - collection_id: landsat-c2-l2
+      region: us-west
+    - collection_id: sentinel-2-l2a
+      region: us-east
+
+steps:
+  - id: ingest
+    module: IngestModule
+    config:
+      catalog_url: https://example.com/stac
+"""
+    
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+        f.write(yaml_content)
+        yaml_path = Path(f.name)
+    
+    try:
+        workflow = load_workflow_from_yaml(yaml_path)
+        
+        assert workflow.strategy.matrix is not None
+        assert len(workflow.strategy.matrix) == 2
+        
+        # Verify first matrix entry
+        assert workflow.strategy.matrix[0]["collection_id"] == "landsat-c2-l2"
+        assert workflow.strategy.matrix[0]["region"] == "us-west"
+        
+        # Verify second matrix entry
+        assert workflow.strategy.matrix[1]["collection_id"] == "sentinel-2-l2a"
+        assert workflow.strategy.matrix[1]["region"] == "us-east"
+    finally:
+        yaml_path.unlink()
