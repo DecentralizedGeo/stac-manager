@@ -34,3 +34,11 @@ def test_checkpoint_manager_import():
     
     assert CheckpointManager is not None
     assert CheckpointRecord is not None
+
+
+def test_stac_manager_import():
+    """Test StacManager is importable from stac_manager.core."""
+    from stac_manager.core import StacManager, WorkflowResult
+    
+    assert StacManager is not None
+    assert WorkflowResult is not None

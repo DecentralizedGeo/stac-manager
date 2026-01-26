@@ -9,6 +9,7 @@ from stac_manager.core.config import (
     load_workflow_from_yaml,
     build_execution_order
 )
+from stac_manager.core.manager import StacManager, WorkflowResult
 
 __all__ = [
     'WorkflowContext',
@@ -21,4 +22,6 @@ __all__ = [
     'StrategyConfig',
     'load_workflow_from_yaml',
     'build_execution_order',
+    'StacManager',
+    'WorkflowResult',
 ]

@@ -63,6 +63,7 @@ class WorkflowResult:
     failure_count: int
     total_items_processed: int
     matrix_entry: dict[str, Any] | None = None  # Track which matrix entry this result is for
+    failure_collector: FailureCollector | None = None  # Access to failure details
 
 
 class StacManager:
@@ -211,20 +212,37 @@ class StacManager:
             data=matrix_entry or {}  # Inject matrix data into context for config merging
         )
         
-        # Instantiate modules (will merge matrix data into configs)
-        modules = self._instantiate_modules(context)
-        
-        # Execute pipeline steps in order
-        total_items = await self._execute_pipeline(modules, context)
+        try:
+            # Instantiate modules (will merge matrix data into configs)
+            modules = self._instantiate_modules(context)
+            
+            # Execute pipeline steps in order
+            total_items = await self._execute_pipeline(modules, context)
+        except Exception as e:
+            # Critical failure during execution
+            self.logger.error(f"Critical error in workflow '{workflow_id}': {e}")
+            return WorkflowResult(
+                success=False,
+                status='failed',
+                summary=f"Critical error: {e}",
+                failure_count=0,
+                total_items_processed=0,
+                matrix_entry=matrix_entry,
+                failure_collector=failure_collector
+            )
         
         # Generate result
         failures = failure_collector.get_all()
         failure_count = len(failures)
         
-        if failure_count == 0:
+        # Determine status based on failures
+        if total_items == 0:
+            status = 'failed'
+            success = False
+        elif failure_count == 0:
             status = 'completed'
             success = True
-        elif failure_count < total_items or total_items == 0:
+        elif failure_count < total_items:
             status = 'completed_with_failures'
             success = True
         else:
@@ -242,7 +260,8 @@ class StacManager:
             summary=f"Processed {total_items} items with {failure_count} failures",
             failure_count=failure_count,
             total_items_processed=total_items,
-            matrix_entry=matrix_entry
+            matrix_entry=matrix_entry,
+            failure_collector=failure_collector  # Include failure collector for inspection
         )
     
     async def _execute_matrix(self) -> list[WorkflowResult]:
