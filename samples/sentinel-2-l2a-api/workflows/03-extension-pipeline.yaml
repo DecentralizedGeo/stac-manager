@@ -1,0 +1,86 @@
+# Tutorial 03: Extension Pipeline - Adding STAC Extensions and Enriching with Sidecar Data
+#
+# This workflow demonstrates advanced data enrichment using ExtensionModule:
+# 1. IngestModule: Fetch items from local sample data
+# 2. ExtensionModule: Add STAC extensions (e.g., EO, Projection, Raster)
+# 3. EnrichModule: Merge with sidecar data (cloud cover, snow cover)
+# 4. ValidateModule: Validate enriched items
+# 5. OutputModule: Persist to disk
+#
+# Key concepts:
+# - STAC Extensions: Add standardized properties to items
+# - Sidecar data: External data merged with items (CSV, JSON)
+# - Data enrichment: Combining multiple sources in-flight
+#
+# Run this workflow:
+#   stac-manager run-workflow samples/sentinel-2-l2a-api/workflows/03-extension-pipeline.yaml
+
+name: extension-pipeline
+version: "1.0"
+description: "Add STAC extensions and enrich with sidecar data"
+
+steps:
+  # Step 1: Fetch items from local file
+  - id: ingest
+    module: IngestModule
+    config:
+      mode: file
+      source: samples/sentinel-2-l2a-api/data/items.json
+      collection_id: sentinel-2-l2a
+
+  # Step 2: Add STAC extensions to items
+  - id: extend
+    module: ExtensionModule
+    depends_on: [ingest]
+    config:
+      extensions:
+        # Add Electro-Optical extension (eo)
+        - name: eo
+          properties:
+            bands:
+              - name: "B2"
+                description: "Blue"
+                common_name: "blue"
+              - name: "B3"
+                description: "Green"
+                common_name: "green"
+              - name: "B4"
+                description: "Red"
+                common_name: "red"
+
+        # Add Projection extension
+        - name: projection
+          properties:
+            epsg: 32633
+
+        # Add Raster extension
+        - name: raster
+          properties:
+            type: "COG"
+
+  # Step 3: Enrich items with sidecar data (cloud cover, snow cover)
+  - id: enrich
+    module: EnrichModule
+    depends_on: [extend]
+    config:
+      sidecar_source: samples/sentinel-2-l2a-api/sidecar-data/cloud-cover.json
+      merge_key: item_id
+      properties_to_merge:
+        - cloud_cover
+        - snow_cover
+
+  # Step 4: Validate enriched items
+  - id: validate
+    module: ValidateModule
+    depends_on: [enrich]
+    config:
+      strict: true
+
+  # Step 5: Output to persistent collection structure
+  - id: output
+    module: OutputModule
+    depends_on: [validate]
+    config:
+      base_dir: ./outputs
+      format: json
+      collection_id: sentinel-2-l2a-tutorial-03
