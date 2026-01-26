@@ -1,0 +1,82 @@
+{
+  "S2C_MSIL2A_20260126T141711_R010_T22QCG_20260126T160908": {
+    "cloud_cover": 2.949858,
+    "snow_cover": 0.0
+  },
+  "S2C_MSIL2A_20260126T141711_R010_T22QCE_20260126T160908": {
+    "cloud_cover": 22.825009,
+    "snow_cover": 0.0
+  },
+  "S2C_MSIL2A_20260126T141711_R010_T22QCD_20260126T160908": {
+    "cloud_cover": 0.0,
+    "snow_cover": 0.0
+  },
+  "S2C_MSIL2A_20260126T141711_R010_T22PBV_20260126T160908": {
+    "cloud_cover": 5.030003,
+    "snow_cover": 0.0
+  },
+  "S2C_MSIL2A_20260126T141711_R010_T22PBC_20260126T160908": {
+    "cloud_cover": 1.49226,
+    "snow_cover": 0.0
+  },
+  "S2C_MSIL2A_20260126T141711_R010_T21QZB_20260126T160908": {
+    "cloud_cover": 1.110076,
+    "snow_cover": 0.0
+  },
+  "S2C_MSIL2A_20260126T141711_R010_T21QYU_20260126T160908": {
+    "cloud_cover": 2.800359,
+    "snow_cover": 0.0
+  },
+  "S2C_MSIL2A_20260126T141711_R010_T21QYB_20260126T160908": {
+    "cloud_cover": 3.920391,
+    "snow_cover": 0.0
+  },
+  "S2C_MSIL2A_20260126T141711_R010_T21QXB_20260126T160908": {
+    "cloud_cover": 4.751385,
+    "snow_cover": 0.0
+  },
+  "S2C_MSIL2A_20260126T141711_R010_T21QXA_20260126T160908": {
+    "cloud_cover": 14.205718,
+    "snow_cover": 0.0
+  },
+  "S2C_MSIL2A_20260126T141711_R010_T21PZQ_20260126T160908": {
+    "cloud_cover": 2.775207,
+    "snow_cover": 0.0
+  },
+  "S2C_MSIL2A_20260126T141711_R010_T21PZN_20260126T160908": {
+    "cloud_cover": 11.324373,
+    "snow_cover": 0.0
+  },
+  "S2C_MSIL2A_20260126T141711_R010_T21PYS_20260126T160908": {
+    "cloud_cover": 1.181167,
+    "snow_cover": 0.0
+  },
+  "S2C_MSIL2A_20260126T141711_R010_T21PYM_20260126T160908": {
+    "cloud_cover": 82.492042,
+    "snow_cover": 0.0
+  },
+  "S2C_MSIL2A_20260126T141711_R010_T21PYL_20260126T160908": {
+    "cloud_cover": 95.019901,
+    "snow_cover": 0.0
+  },
+  "S2C_MSIL2A_20260126T141711_R010_T21PYK_20260126T160908": {
+    "cloud_cover": 90.718156,
+    "snow_cover": 0.0
+  },
+  "S2C_MSIL2A_20260126T141711_R010_T21PXS_20260126T160908": {
+    "cloud_cover": 7.113288,
+    "snow_cover": 0.0
+  },
+  "S2C_MSIL2A_20260126T141711_R010_T21PXP_20260126T160908": {
+    "cloud_cover": 20.972289,
+    "snow_cover": 0.0
+  },
+  "S2C_MSIL2A_20260126T141711_R010_T21PWT_20260126T160908": {
+    "cloud_cover": 69.385678,
+    "snow_cover": 0.0
+  },
+  "S2C_MSIL2A_20260126T141711_R010_T21PWQ_20260126T160908": {
+    "cloud_cover": 9.795078,
+    "snow_cover": 0.0
+  }
+}
