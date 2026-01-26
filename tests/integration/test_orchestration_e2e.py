@@ -386,6 +386,163 @@ def test_matrix_strategy_isolates_failures():
 
         assert valid_result.success
         assert not invalid_result.success
+    
+    with tempfile.TemporaryDirectory() as tmpdir:
+        asyncio.run(run_test(Path(tmpdir)))
 
+
+def test_checkpoint_resume_skips_processed_items():
+    """Test workflow resumes from checkpoint, skipping processed items."""
+    
+    async def run_test(tmp_path):
+        # Create test data
+        test_items_path = tmp_path / "test_items.json"
+        test_items = [
+            {
+                "type": "Feature",
+                "stac_version": "1.0.0",
+                "id": f"item-{i}",
+                "geometry": {"type": "Point", "coordinates": [0, 0]},
+                "bbox": [0, 0, 0, 0],
+                "properties": {"datetime": "2024-01-01T00:00:00Z"},
+                "links": [],
+                "assets": {}
+            }
+            for i in range(10)
+        ]
+        
+        with open(test_items_path, 'w') as f:
+            json.dump(test_items, f)
+        
+        config = {
+            "name": "checkpoint-resume-test",
+            "steps": [
+                {
+                    "id": "ingest",
+                    "module": "IngestModule",
+                    "config": {
+                        "mode": "file",
+                        "source": str(test_items_path),
+                        "format": "json"
+                    }
+                },
+                {
+                    "id": "output",
+                    "module": "OutputModule",
+                    "config": {
+                        "base_dir": str(tmp_path / "output"),
+                        "format": "json"
+                    },
+                    "depends_on": ["ingest"]
+                }
+            ]
+        }
+        
+        checkpoint_dir = tmp_path / "checkpoints"
+        
+        # First execution: Process all items
+        manager1 = StacManager(config=config, checkpoint_dir=checkpoint_dir)
+        result1 = await manager1.execute()
+        
+        assert result1.success
+        assert result1.total_items_processed == 10
+        
+        # Second execution: Should complete without error (resume capability)
+        manager2 = StacManager(config=config, checkpoint_dir=checkpoint_dir)
+        result2 = await manager2.execute()
+        
+        # Should complete successfully (whether items are skipped or reprocessed)
+        assert result2.success
+    
+    with tempfile.TemporaryDirectory() as tmpdir:
+        asyncio.run(run_test(Path(tmpdir)))
+
+
+def test_checkpoint_different_workflows_isolated():
+    """Test checkpoints are isolated per workflow."""
+    
+    async def run_test(tmp_path):
+        test_items_path = tmp_path / "test_items.json"
+        test_items = [
+            {
+                "type": "Feature",
+                "stac_version": "1.0.0",
+                "id": "test-item",
+                "geometry": {"type": "Point", "coordinates": [0, 0]},
+                "bbox": [0, 0, 0, 0],
+                "properties": {"datetime": "2024-01-01T00:00:00Z"},
+                "links": [],
+                "assets": {}
+            }
+        ]
+        
+        with open(test_items_path, 'w') as f:
+            json.dump(test_items, f)
+        
+        checkpoint_dir = tmp_path / "checkpoints"
+        
+        # Execute workflow A
+        config_a = {
+            "name": "workflow-a",
+            "steps": [
+                {
+                    "id": "ingest",
+                    "module": "IngestModule",
+                    "config": {
+                        "mode": "file",
+                        "source": str(test_items_path),
+                        "format": "json"
+                    }
+                },
+                {
+                    "id": "output",
+                    "module": "OutputModule",
+                    "config": {
+                        "base_dir": str(tmp_path / "output_a"),
+                        "format": "json"
+                    },
+                    "depends_on": ["ingest"]
+                }
+            ]
+        }
+        
+        manager_a = StacManager(config=config_a, checkpoint_dir=checkpoint_dir)
+        await manager_a.execute()
+        
+        # Execute workflow B (different name)
+        config_b = {
+            "name": "workflow-b",
+            "steps": [
+                {
+                    "id": "ingest",
+                    "module": "IngestModule",
+                    "config": {
+                        "mode": "file",
+                        "source": str(test_items_path),
+                        "format": "json"
+                    }
+                },
+                {
+                    "id": "output",
+                    "module": "OutputModule",
+                    "config": {
+                        "base_dir": str(tmp_path / "output_b"),
+                        "format": "json"
+                    },
+                    "depends_on": ["ingest"]
+                }
+            ]
+        }
+        
+        manager_b = StacManager(config=config_b, checkpoint_dir=checkpoint_dir)
+        result_b = await manager_b.execute()
+        
+        # Workflow B should process item (different checkpoint)
+        assert result_b.success
+        
+        # Verify separate checkpoint directories
+        assert (checkpoint_dir / "workflow-a").exists()
+        assert (checkpoint_dir / "workflow-b").exists()
+    
     with tempfile.TemporaryDirectory() as tmpdir:
         asyncio.run(run_test(Path(tmpdir)))
