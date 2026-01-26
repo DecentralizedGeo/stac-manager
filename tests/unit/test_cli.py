@@ -10,7 +10,7 @@ def test_cli_main_help():
     """Test CLI shows help message."""
     runner = CliRunner()
     result = runner.invoke(cli, ['--help'])
-    
+
     assert result.exit_code == 0
     assert 'stac-manager' in result.output.lower()
     assert 'run-workflow' in result.output.lower()
@@ -21,7 +21,7 @@ def test_cli_version():
     """Test CLI shows version."""
     runner = CliRunner()
     result = runner.invoke(cli, ['--version'])
-    
+
     assert result.exit_code == 0
     assert '1.0.0' in result.output  # Should match package version
 
@@ -29,7 +29,7 @@ def test_cli_version():
 def test_validate_workflow_valid_config():
     """Test validate-workflow accepts valid configuration."""
     runner = CliRunner()
-    
+
     # Create valid workflow file
     with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
         f.write("""
@@ -41,10 +41,10 @@ steps:
       source_file: test.json
 """)
         yaml_path = f.name
-    
+
     try:
         result = runner.invoke(cli, ['validate-workflow', yaml_path])
-        
+
         assert result.exit_code == 0
         assert 'valid' in result.output.lower() or 'success' in result.output.lower()
     finally:
@@ -54,7 +54,7 @@ steps:
 def test_validate_workflow_invalid_config():
     """Test validate-workflow detects invalid configuration."""
     runner = CliRunner()
-    
+
     # Create invalid workflow file (missing required fields)
     with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
         f.write("""
@@ -65,10 +65,10 @@ steps:
     config: {}
 """)
         yaml_path = f.name
-    
+
     try:
         result = runner.invoke(cli, ['validate-workflow', yaml_path])
-        
+
         assert result.exit_code != 0
         assert 'error' in result.output.lower() or 'invalid' in result.output.lower()
     finally:
@@ -78,7 +78,7 @@ steps:
 def test_validate_workflow_detects_cycle():
     """Test validate-workflow detects circular dependencies."""
     runner = CliRunner()
-    
+
     with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
         f.write("""
 name: cycle-workflow
@@ -93,10 +93,10 @@ steps:
     depends_on: [step_a]
 """)
         yaml_path = f.name
-    
+
     try:
         result = runner.invoke(cli, ['validate-workflow', yaml_path])
-        
+
         assert result.exit_code != 0
         assert 'circular' in result.output.lower() or 'cycle' in result.output.lower()
     finally:
@@ -107,7 +107,7 @@ def test_validate_workflow_file_not_found():
     """Test validate-workflow handles missing file."""
     runner = CliRunner()
     result = runner.invoke(cli, ['validate-workflow', '/nonexistent/file.yaml'])
-    
+
     assert result.exit_code != 0
     assert ('not found' in result.output.lower() or 'does not exist' in result.output.lower())
 
@@ -115,7 +115,7 @@ def test_validate_workflow_file_not_found():
 def test_run_workflow_basic():
     """Test run-workflow executes a simple workflow."""
     runner = CliRunner()
-    
+
     with runner.isolated_filesystem():
         # Create test data
         test_items = [
@@ -130,10 +130,10 @@ def test_run_workflow_basic():
                 "assets": {}
             }
         ]
-        
+
         with open('test_items.json', 'w') as f:
             json.dump(test_items, f)
-        
+
         # Create workflow config
         with open('workflow.yaml', 'w') as f:
             f.write("""
@@ -152,10 +152,10 @@ steps:
       format: json
     depends_on: [ingest]
 """)
-        
+
         # Run workflow
         result = runner.invoke(cli, ['run-workflow', 'workflow.yaml'])
-        
+
         # Should complete successfully
         assert result.exit_code == 0
         assert 'completed' in result.output.lower() or 'success' in result.output.lower()
@@ -164,7 +164,7 @@ steps:
 def test_run_workflow_dry_run():
     """Test run-workflow --dry-run validates without executing."""
     runner = CliRunner()
-    
+
     with runner.isolated_filesystem():
         with open('workflow.yaml', 'w') as f:
             f.write("""
@@ -175,9 +175,9 @@ steps:
     config:
       items: []
 """)
-        
+
         result = runner.invoke(cli, ['run-workflow', '--dry-run', 'workflow.yaml'])
-        
+
         assert result.exit_code == 0
         assert 'dry' in result.output.lower() or 'would execute' in result.output.lower()
 
@@ -185,7 +185,7 @@ steps:
 def test_run_workflow_with_checkpoint_dir():
     """Test run-workflow with custom checkpoint directory."""
     runner = CliRunner()
-    
+
     with runner.isolated_filesystem():
         test_items = [
             {
@@ -199,10 +199,10 @@ def test_run_workflow_with_checkpoint_dir():
                 "assets": {}
             }
         ]
-        
+
         with open('test_items.json', 'w') as f:
             json.dump(test_items, f)
-        
+
         with open('workflow.yaml', 'w') as f:
             f.write("""
 name: checkpoint-test
@@ -220,13 +220,13 @@ steps:
       format: json
     depends_on: [ingest]
 """)
-        
+
         result = runner.invoke(cli, [
             'run-workflow',
             '--checkpoint-dir', './custom_checkpoints',
             'workflow.yaml'
         ])
-        
+
         assert result.exit_code == 0
         assert Path('./custom_checkpoints').exists()
 
@@ -234,7 +234,7 @@ steps:
 def test_run_workflow_shows_progress():
     """Test run-workflow shows progress messages."""
     runner = CliRunner()
-    
+
     with runner.isolated_filesystem():
         test_items = [
             {
@@ -249,10 +249,10 @@ def test_run_workflow_shows_progress():
             }
             for i in range(5)
         ]
-        
+
         with open('test_items.json', 'w') as f:
             json.dump(test_items, f)
-        
+
         with open('workflow.yaml', 'w') as f:
             f.write("""
 name: progress-test
@@ -270,9 +270,9 @@ steps:
       format: json
     depends_on: [ingest]
 """)
-        
+
         result = runner.invoke(cli, ['run-workflow', 'workflow.yaml'])
-        
+
         # Should show progress messages
         assert 'loading' in result.output.lower() or 'executing' in result.output.lower()
         assert 'ingest' in result.output.lower() or 'progress-test' in result.output.lower()
@@ -281,7 +281,7 @@ steps:
 def test_run_workflow_verbose_logging():
     """Test run-workflow with --log-level DEBUG shows detailed output."""
     runner = CliRunner()
-    
+
     with runner.isolated_filesystem():
         with open('test_items.json', 'w') as f:
             json.dump([
@@ -296,7 +296,7 @@ def test_run_workflow_verbose_logging():
                     "assets": {}
                 }
             ], f)
-        
+
         with open('workflow.yaml', 'w') as f:
             f.write("""
 name: verbose-test
@@ -314,9 +314,9 @@ steps:
       format: json
     depends_on: [ingest]
 """)
-        
+
         result = runner.invoke(cli, ['--log-level', 'DEBUG', 'run-workflow', 'workflow.yaml'])
-        
+
         # Should show more detailed output with DEBUG level
         assert result.exit_code == 0
 
