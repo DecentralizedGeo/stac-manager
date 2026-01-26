@@ -1,5 +1,8 @@
 """Tests for StacManager orchestration."""
 import pytest
+import asyncio
+import tempfile
+import json
 from pathlib import Path
 import logging
 from stac_manager.core.manager import MODULE_REGISTRY, load_module_class, StacManager
@@ -200,3 +203,53 @@ def test_stac_manager_module_instantiation_with_config():
     ingest_module = modules["ingest"]
     assert ingest_module.config.source == "https://test.example.com/api"
     assert ingest_module.config.collection_id == "test-collection"
+
+
+@pytest.mark.asyncio
+async def test_stac_manager_execute_simple_pipeline(tmp_path):
+    """Test StacManager executes a simple pipeline."""
+    # Create test data file
+    test_data_path = tmp_path / "test_items.json"
+    test_items = [
+        {
+            "type": "Feature",
+            "stac_version": "1.0.0",
+            "id": "test-item-1",
+            "geometry": {"type": "Point", "coordinates": [0, 0]},
+            "bbox": [0, 0, 0, 0],
+            "properties": {"datetime": "2024-01-01T00:00:00Z"},
+            "links": [],
+            "assets": {}
+        }
+    ]
+    
+    with open(test_data_path, 'w') as f:
+        json.dump(test_items, f)
+    
+    # Create workflow
+    config = {
+        "name": "simple-pipeline",
+        "steps": [
+            {
+                "id": "ingest",
+                "module": "IngestModule",
+                "config": {"mode": "file", "source": str(test_data_path), "format": "json"}
+            },
+            {
+                "id": "output",
+                "module": "OutputModule",
+                "config": {"base_dir": str(tmp_path / "output"), "format": "json"},
+                "depends_on": ["ingest"]
+            }
+        ]
+    }
+    
+    manager = StacManager(config=config, checkpoint_dir=tmp_path / "checkpoints")
+    
+    # Execute pipeline
+    result = await manager.execute()
+    
+    # Verify execution succeeded
+    assert result.success is True
+    assert result.failure_count == 0
+    assert result.total_items_processed == 1
