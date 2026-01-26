@@ -1,8 +1,10 @@
 """Workflow orchestration and execution management."""
 import logging
 from pathlib import Path
+from typing import Any
 from stac_manager.exceptions import ConfigurationError
 from stac_manager.core.config import WorkflowDefinition, build_execution_order
+from stac_manager.core.context import WorkflowContext
 
 
 # Module registry: Maps module names to their import paths
@@ -97,3 +99,38 @@ class StacManager:
             f"with {len(self.workflow.steps)} steps"
         )
         self.logger.debug(f"Execution order: {self._execution_order}")
+    
+    def _instantiate_modules(self, context: WorkflowContext) -> dict[str, Any]:
+        """
+        Instantiate all modules for the workflow.
+        
+        Args:
+            context: Workflow execution context
+            
+        Returns:
+            Dictionary mapping step_id to instantiated module
+            
+        Raises:
+            ConfigurationError: If module instantiation fails
+        """
+        modules = {}
+        
+        for step in self.workflow.steps:
+            try:
+                # Load module class
+                module_class = load_module_class(step.module)
+                
+                # Instantiate with config
+                module_instance = module_class(config=step.config)
+                
+                modules[step.id] = module_instance
+                
+                self.logger.debug(
+                    f"Instantiated {step.module} for step '{step.id}'"
+                )
+            except Exception as e:
+                raise ConfigurationError(
+                    f"Failed to instantiate module for step '{step.id}': {e}"
+                ) from e
+        
+        return modules

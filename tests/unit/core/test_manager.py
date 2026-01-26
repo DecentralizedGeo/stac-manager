@@ -4,6 +4,8 @@ from pathlib import Path
 import logging
 from stac_manager.core.manager import MODULE_REGISTRY, load_module_class, StacManager
 from stac_manager.core.config import WorkflowDefinition, StepConfig
+from stac_manager.core.context import WorkflowContext
+from stac_manager.protocols import Fetcher, Modifier, Bundler
 from stac_manager.exceptions import ConfigurationError
 
 
@@ -117,3 +119,84 @@ def test_stac_manager_detects_circular_dependencies():
         StacManager(config=config)
     
     assert "circular dependency" in str(exc_info.value).lower()
+
+
+def test_stac_manager_instantiates_modules():
+    """Test StacManager instantiates all modules for workflow."""
+    config = {
+        "name": "test-workflow",
+        "steps": [
+            {
+                "id": "ingest", 
+                "module": "IngestModule", 
+                "config": {
+                    "mode": "api",
+                    "source": "https://test.example.com/api",
+                    "collection_id": "test"
+                }
+            },
+            {"id": "update", "module": "UpdateModule", "config": {"fields": {}}, "depends_on": ["ingest"]},
+            {"id": "output", "module": "OutputModule", "config": {"base_dir": "./output", "format": "json"}, "depends_on": ["update"]}
+        ]
+    }
+    
+    manager = StacManager(config=config)
+    
+    # Create mock context for instantiation
+    context = WorkflowContext(
+        workflow_id="test-workflow",
+        config={},
+        logger=manager.logger,
+        failure_collector=None,  # Will be created by manager
+        checkpoints=None,  # Will be created by manager
+        data={}
+    )
+    
+    # Instantiate modules
+    modules = manager._instantiate_modules(context)
+    
+    # Verify all modules instantiated
+    assert "ingest" in modules
+    assert "update" in modules
+    assert "output" in modules
+    
+    # Verify protocol compliance
+    assert isinstance(modules["ingest"], Fetcher)
+    assert isinstance(modules["update"], Modifier)
+    assert isinstance(modules["output"], Bundler)
+
+
+def test_stac_manager_module_instantiation_with_config():
+    """Test modules receive their configuration."""
+    config = {
+        "name": "test-workflow",
+        "steps": [
+            {
+                "id": "ingest",
+                "module": "IngestModule",
+                "config": {
+                    "mode": "api",
+                    "source": "https://test.example.com/api",
+                    "collection_id": "test-collection"
+                }
+            }
+        ]
+    }
+    
+    manager = StacManager(config=config)
+    
+    context = WorkflowContext(
+        workflow_id="test-workflow",
+        config={},
+        logger=manager.logger,
+        failure_collector=None,
+        checkpoints=None,
+        data={}
+    )
+    
+    modules = manager._instantiate_modules(context)
+    
+    # Verify module has config
+    ingest_module = modules["ingest"]
+    assert ingest_module.config.source == "https://test.example.com/api"
+    assert ingest_module.config.collection_id == "test-collection"
