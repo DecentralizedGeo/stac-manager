@@ -18,6 +18,7 @@ def test_cli_help():
     
     assert result.exit_code == 0
     assert 'generate-sample-data' in result.output.lower()
+    assert '--catalog-url' in result.output
     assert '--collection' in result.output
     assert '--items' in result.output
 

@@ -114,6 +114,12 @@ def extract_collection_metadata(catalog_url: str, collection_id: str) -> Dict:
 
 @click.command(name='generate-sample-data')
 @click.option(
+    '--catalog-url',
+    default='https://planetarycomputer.microsoft.com/api/stac/v1',
+    type=str,
+    help='STAC catalog URL (default: Planetary Computer)'
+)
+@click.option(
     '--collection',
     required=True,
     help='Collection ID to fetch (e.g., sentinel-2-l2a)'
@@ -130,9 +136,10 @@ def extract_collection_metadata(catalog_url: str, collection_id: str) -> Dict:
     type=click.Path(),
     help='Output directory for samples (default: samples/)'
 )
-def cli(collection: str, items: int, output_dir: str):
+def cli(catalog_url: str, collection: str, items: int, output_dir: str):
     """Generate sample STAC data for documentation and tutorials."""
     click.echo(f"Generating {items} items for collection: {collection}")
+    click.echo(f"Catalog: {catalog_url}")
     click.echo(f"Output directory: {output_dir}")
 
 
