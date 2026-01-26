@@ -1,6 +1,9 @@
 """Tests for StacManager orchestration."""
 import pytest
-from stac_manager.core.manager import MODULE_REGISTRY, load_module_class
+from pathlib import Path
+import logging
+from stac_manager.core.manager import MODULE_REGISTRY, load_module_class, StacManager
+from stac_manager.core.config import WorkflowDefinition, StepConfig
 from stac_manager.exceptions import ConfigurationError
 
 
@@ -46,3 +49,71 @@ def test_load_module_class_all_registered():
         module_class = load_module_class(module_name)
         assert module_class is not None
         assert module_class.__name__ == module_name
+
+
+def test_stac_manager_initialization_from_dict():
+    """Test StacManager initialization with dict configuration."""
+    config = {
+        "name": "test-workflow",
+        "steps": [
+            {
+                "id": "ingest",
+                "module": "IngestModule",
+                "config": {"collection_id": "test"}
+            }
+        ]
+    }
+    
+    manager = StacManager(config=config)
+    
+    assert manager.workflow.name == "test-workflow"
+    assert len(manager.workflow.steps) == 1
+    assert manager.workflow.steps[0].id == "ingest"
+
+
+def test_stac_manager_initialization_from_workflow_definition():
+    """Test StacManager initialization with WorkflowDefinition."""
+    workflow = WorkflowDefinition(
+        name="test-workflow",
+        steps=[
+            StepConfig(id="ingest", module="IngestModule", config={})
+        ]
+    )
+    
+    manager = StacManager(config=workflow)
+    
+    assert manager.workflow is workflow
+    assert manager.workflow.name == "test-workflow"
+
+
+def test_stac_manager_validates_execution_order():
+    """Test StacManager validates and builds execution order."""
+    config = {
+        "name": "test-workflow",
+        "steps": [
+            {"id": "step2", "module": "UpdateModule", "config": {}, "depends_on": ["step1"]},
+            {"id": "step1", "module": "IngestModule", "config": {}}
+        ]
+    }
+    
+    manager = StacManager(config=config)
+    
+    # Should resolve correct order despite definition order
+    execution_order = manager._execution_order
+    assert execution_order == ["step1", "step2"]
+
+
+def test_stac_manager_detects_circular_dependencies():
+    """Test StacManager detects cycles during initialization."""
+    config = {
+        "name": "test-workflow",
+        "steps": [
+            {"id": "step_a", "module": "UpdateModule", "config": {}, "depends_on": ["step_b"]},
+            {"id": "step_b", "module": "TransformModule", "config": {}, "depends_on": ["step_a"]}
+        ]
+    }
+    
+    with pytest.raises(ConfigurationError) as exc_info:
+        StacManager(config=config)
+    
+    assert "circular dependency" in str(exc_info.value).lower()
