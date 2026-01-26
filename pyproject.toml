@@ -5,6 +5,9 @@ description = "Modular STAC pipeline manager"
 authors = ["DecentralizedGeo"]
 packages = [{include = "stac_manager", from = "src"}]
 
+[tool.poetry.scripts]
+stac-manager = "stac_manager.cli:cli"
+
 [tool.poetry.dependencies]
 python = "^3.12"
 pystac = "^1.10.0"
@@ -17,6 +20,8 @@ click = "^8.1.0"
 pyyaml = "^6.0"
 jmespath = "^1.0.0"
 requests-mock = "^1.12.1"
+pyarrow = "^14.0.0"
+numpy = "<2"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"
