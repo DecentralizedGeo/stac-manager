@@ -138,7 +138,7 @@ After installing Poetry on Windows, you may need to add it to your PATH. Restart
 ## Next Steps
 
 - 🚀 **[Quickstart Guide](quickstart.md)** - Run your first workflow
-- 📚 **[Tutorial 01: Basic Pipeline](tutorials/01-basic-pipeline.md)** - Deeper dive into workflows
+- 🏗️ **[System Architecture](../spec/stac-manager-v1.0.0/00-system-overview.md)** - Understand the design
 
 ---
 

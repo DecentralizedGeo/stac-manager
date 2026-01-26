@@ -208,11 +208,11 @@ Run the workflow again:
 stac-manager run-workflow samples/HLSS30_2.0-api/workflows/00-quickstart.yaml
 ```
 
-### Explore More Tutorials
+### Learn More
 
-- **[Tutorial 01: Basic Pipeline](tutorials/01-basic-pipeline.md)** - Detailed walkthrough of Ingest → Validate → Output
-- **[Tutorial 02: Update Pipeline](tutorials/02-update-pipeline.md)** - Modify item properties in-flight
-- **[Tutorial 03: Extension Pipeline](tutorials/03-extension-pipeline.md)** - Add extensions and enrich with sidecar data
+- 📚 **[System Architecture](../spec/stac-manager-v1.0.0/00-system-overview.md)** - Understand Pipes and Filters design
+- 🔧 **[Module Reference](../spec/stac-manager-v1.0.0/)** - Complete module documentation
+- *📖 **Tutorials** - Coming in Phase C (Basic, Update, and Extension pipelines)*
 
 ---
 
