@@ -18,7 +18,7 @@ def test_workflow_context_creation():
         checkpoints=MockCheckpointManager(),
         data={"collection_id": "test-collection"}
     )
-    
+
     assert ctx.workflow_id == "test-001"
     assert ctx.config["name"] == "test"
     assert ctx.data["collection_id"] == "test-collection"
@@ -27,13 +27,13 @@ def test_workflow_context_creation():
 def test_failure_collector_add():
     """FailureCollector records failures."""
     collector = FailureCollector()
-    
+
     collector.add(
         item_id="item-001",
         error="Validation failed",
         step_id="validate"
     )
-    
+
     failures = collector.get_all()
     assert len(failures) == 1
     assert failures[0].item_id == "item-001"
@@ -44,7 +44,7 @@ def test_failure_collector_add():
 def test_failure_collector_with_exception():
     """FailureCollector handles Exception objects."""
     collector = FailureCollector()
-    
+
     try:
         raise ValueError("Test error")
     except ValueError as e:
@@ -53,7 +53,7 @@ def test_failure_collector_with_exception():
             error=e,
             step_id="transform"
         )
-    
+
     failures = collector.get_all()
     assert len(failures) == 1
     assert failures[0].error_type == "ValueError"
@@ -64,11 +64,11 @@ def test_workflow_context_with_checkpoint_manager():
     """Test WorkflowContext includes CheckpointManager."""
     with tempfile.TemporaryDirectory() as tmpdir:
         checkpoint_manager = CheckpointManager(
-            directory=Path(tmpdir),
             workflow_id="test-workflow",
-            step_id="step1"
+            collection_id="test-collection",
+            checkpoint_root=Path(tmpdir)
         )
-        
+
         context = WorkflowContext(
             workflow_id="test-workflow",
             config={},
@@ -77,7 +77,7 @@ def test_workflow_context_with_checkpoint_manager():
             checkpoints=checkpoint_manager,
             data={}
         )
-        
+
         assert context.checkpoints is checkpoint_manager
         assert isinstance(context.checkpoints, CheckpointManager)
 
@@ -86,11 +86,11 @@ def test_workflow_context_fork_shares_checkpoint_manager():
     """Test that forked contexts share the same CheckpointManager."""
     with tempfile.TemporaryDirectory() as tmpdir:
         checkpoint_manager = CheckpointManager(
-            directory=Path(tmpdir),
             workflow_id="test-workflow",
-            step_id="step1"
+            collection_id="test-collection",
+            checkpoint_root=Path(tmpdir)
         )
-        
+
         parent_context = WorkflowContext(
             workflow_id="test-workflow",
             config={},
@@ -99,13 +99,13 @@ def test_workflow_context_fork_shares_checkpoint_manager():
             checkpoints=checkpoint_manager,
             data={"parent_key": "parent_value"}
         )
-        
+
         # Fork context
         child_context = parent_context.fork(data={"child_key": "child_value"})
-        
+
         # Should share same checkpoint manager
         assert child_context.checkpoints is parent_context.checkpoints
-        
+
         # Should have merged data
         assert child_context.data["parent_key"] == "parent_value"
         assert child_context.data["child_key"] == "child_value"
