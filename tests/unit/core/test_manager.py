@@ -253,3 +253,28 @@ async def test_stac_manager_execute_simple_pipeline(tmp_path):
     assert result.success is True
     assert result.failure_count == 0
     assert result.total_items_processed == 1
+
+
+@pytest.mark.asyncio
+async def test_stac_manager_matrix_strategy_note():
+    """Test documenting that matrix strategy requires config merging, not variable substitution."""
+    # NOTE: Variable substitution (${var}) is deferred to v1.1
+    # Matrix strategy in v1.0 works by merging matrix entry data into step configs directly
+    # This means you need to structure your workflow to accept matrix data as direct config values
+    
+    # Example: Instead of {"source": "${source_file}"}, use empty config and rely on context.data
+    # The manager will merge matrix entry data into step config during instantiation
+    
+    config = {
+        "name": "matrix-note",
+        "strategy": {
+            "matrix": [
+                {"note": "Matrix v1.0 uses direct config merging"}
+            ]
+        },
+        "steps": []
+    }
+    
+    # This is a documentation test - no actual execution needed
+    manager = StacManager(config=config)
+    assert manager.workflow.strategy.matrix is not None

@@ -1,5 +1,6 @@
 """Workflow orchestration and execution management."""
 import logging
+import asyncio
 from pathlib import Path
 from typing import Any
 from dataclasses import dataclass
@@ -61,6 +62,7 @@ class WorkflowResult:
     summary: str
     failure_count: int
     total_items_processed: int
+    matrix_entry: dict[str, Any] | None = None  # Track which matrix entry this result is for
 
 
 class StacManager:
@@ -119,8 +121,11 @@ class StacManager:
         """
         Instantiate all modules for the workflow.
         
+        Matrix context data from context.data is merged into step configs,
+        allowing matrix entries to override or extend step configuration.
+        
         Args:
-            context: Workflow execution context
+            context: Workflow execution context (contains matrix data in context.data)
             
         Returns:
             Dictionary mapping step_id to instantiated module
@@ -135,8 +140,12 @@ class StacManager:
                 # Load module class
                 module_class = load_module_class(step.module)
                 
-                # Instantiate with config
-                module_instance = module_class(config=step.config)
+                # Merge matrix context data into step config
+                # Matrix data from context.data takes precedence for matching keys
+                merged_config = {**step.config, **context.data}
+                
+                # Instantiate with merged config
+                module_instance = module_class(config=merged_config)
                 
                 modules[step.id] = module_instance
                 
@@ -150,37 +159,59 @@ class StacManager:
         
         return modules
     
-    async def execute(self) -> WorkflowResult:
+    async def execute(self) -> WorkflowResult | list[WorkflowResult]:
         """
         Execute the configured workflow pipeline.
         
+        Supports both single pipeline and matrix strategy (parallel pipelines).
+        
         Returns:
-            WorkflowResult with execution summary
+            WorkflowResult for single pipeline, or list of WorkflowResult for matrix strategy
             
         Raises:
             ConfigurationError: If critical error during execution
         """
-        self.logger.info(f"Starting workflow '{self.workflow.name}'")
+        # Check for matrix strategy
+        if self.workflow.strategy.matrix:
+            return await self._execute_matrix()
+        else:
+            return await self._execute_single()
+    
+    async def _execute_single(self, matrix_entry: dict[str, Any] | None = None) -> WorkflowResult:
+        """
+        Execute a single pipeline instance.
+        
+        Args:
+            matrix_entry: Optional matrix entry data to merge into step configs
+            
+        Returns:
+            WorkflowResult with execution summary
+        """
+        workflow_id = self.workflow.name
+        if matrix_entry and "collection_id" in matrix_entry:
+            workflow_id = f"{self.workflow.name}-{matrix_entry['collection_id']}"
+        
+        self.logger.info(f"Starting workflow '{workflow_id}'")
         
         # Initialize workflow context
         failure_collector = FailureCollector()
         checkpoint_manager = CheckpointManager(
-            workflow_id=self.workflow.name,
-            collection_id="default",
+            workflow_id=workflow_id,
+            collection_id=matrix_entry.get("collection_id", "default") if matrix_entry else "default",
             checkpoint_root=self.checkpoint_dir,
             resume_from_existing=self.workflow.resume_from_checkpoint
         )
         
         context = WorkflowContext(
-            workflow_id=self.workflow.name,
+            workflow_id=workflow_id,
             config={},
             logger=self.logger,
             failure_collector=failure_collector,
             checkpoints=checkpoint_manager,
-            data={}
+            data=matrix_entry or {}  # Inject matrix data into context for config merging
         )
         
-        # Instantiate modules
+        # Instantiate modules (will merge matrix data into configs)
         modules = self._instantiate_modules(context)
         
         # Execute pipeline steps in order
@@ -193,7 +224,7 @@ class StacManager:
         if failure_count == 0:
             status = 'completed'
             success = True
-        elif failure_count < total_items:
+        elif failure_count < total_items or total_items == 0:
             status = 'completed_with_failures'
             success = True
         else:
@@ -201,7 +232,7 @@ class StacManager:
             success = False
         
         self.logger.info(
-            f"Workflow '{self.workflow.name}' {status}: "
+            f"Workflow '{workflow_id}' {status}: "
             f"{total_items} items processed, {failure_count} failures"
         )
         
@@ -210,8 +241,60 @@ class StacManager:
             status=status,
             summary=f"Processed {total_items} items with {failure_count} failures",
             failure_count=failure_count,
-            total_items_processed=total_items
+            total_items_processed=total_items,
+            matrix_entry=matrix_entry
         )
+    
+    async def _execute_matrix(self) -> list[WorkflowResult]:
+        """
+        Execute multiple parallel pipelines for matrix strategy.
+        
+        Each matrix entry spawns an independent pipeline execution.
+        Failures in one pipeline don't affect others.
+        
+        Returns:
+            List of WorkflowResult (one per matrix entry)
+        """
+        matrix = self.workflow.strategy.matrix
+        self.logger.info(
+            f"Executing matrix strategy with {len(matrix)} parallel pipelines"
+        )
+        
+        # Execute all matrix entries in parallel
+        tasks = [
+            self._execute_single(matrix_entry=entry)
+            for entry in matrix
+        ]
+        
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Convert exceptions to failed results
+        final_results = []
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                self.logger.error(
+                    f"Matrix entry {i} failed with exception: {result}"
+                )
+                final_results.append(
+                    WorkflowResult(
+                        success=False,
+                        status='failed',
+                        summary=f"Exception: {result}",
+                        failure_count=0,
+                        total_items_processed=0,
+                        matrix_entry=matrix[i]
+                    )
+                )
+            else:
+                final_results.append(result)
+        
+        # Log summary
+        successful = sum(1 for r in final_results if r.success)
+        self.logger.info(
+            f"Matrix strategy completed: {successful}/{len(matrix)} pipelines succeeded"
+        )
+        
+        return final_results
     
     async def _execute_pipeline(
         self,
