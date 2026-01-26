@@ -1,0 +1,238 @@
+# Quickstart Guide
+
+Get started with STAC Manager in 5 minutes by running your first pipeline.
+
+---
+
+## Goal
+
+Run a simple workflow that:
+1. Fetches STAC items from a local file
+2. Validates them against the STAC schema
+3. Outputs them to a structured directory
+
+---
+
+## Prerequisites
+
+- STAC Manager installed ([Installation Guide](installation.md))
+- Sample data available (included in repo at `samples/HLSS30_2.0-api/`)
+
+---
+
+## Step 1: Verify Installation
+
+First, confirm STAC Manager is installed:
+
+```bash
+stac-manager --version
+```
+
+Expected output: `stac-manager, version 1.0.0`
+
+---
+
+## Step 2: Review the Workflow Configuration
+
+Open `samples/HLSS30_2.0-api/workflows/00-quickstart.yaml` to see the workflow definition:
+
+```yaml
+name: quickstart-pipeline
+
+steps:
+  - id: ingest
+    module: IngestModule
+    config:
+      mode: file
+      path: samples/HLSS30_2.0-api/data/items.json
+      collection_id: HLSS30_2.0
+
+  - id: validate
+    module: ValidateModule
+    depends_on: [ingest]
+    config:
+      strict: true
+
+  - id: output
+    module: OutputModule
+    depends_on: [validate]
+    config:
+      base_dir: ./outputs
+      format: json
+      collection_id: HLSS30_2.0
+```
+
+**What this does:**
+- **IngestModule**: Reads STAC items from a local JSON file
+- **ValidateModule**: Checks each item against STAC schema (strict mode)
+- **OutputModule**: Writes validated items to `./outputs/HLSS30_2.0/`
+
+---
+
+## Step 3: Run the Workflow
+
+Execute the workflow using the CLI:
+
+```bash
+stac-manager run-workflow samples/HLSS30_2.0-api/workflows/00-quickstart.yaml
+```
+
+**Expected output:**
+
+```
+Starting workflow: quickstart-pipeline
+[ingest] Loaded N items from file
+[validate] Validated N items (0 errors)
+[output] Wrote N items to ./outputs/HLSS30_2.0
+✓ Workflow completed successfully
+```
+
+**Time**: ~5-10 seconds
+
+---
+
+## Step 4: Inspect the Output
+
+Check the output directory:
+
+```bash
+ls -R outputs/HLSS30_2.0
+```
+
+**You should see:**
+
+```
+outputs/HLSS30_2.0/
+├── collection.json          # Collection metadata
+└── items/
+    ├── item_1.json
+    ├── item_2.json
+    └── ... (more items)
+```
+
+**View a single item:**
+
+```bash
+cat outputs/HLSS30_2.0/items/item_1.json | head -n 30
+```
+
+---
+
+## What Just Happened?
+
+### The Pipeline
+
+STAC Manager executed three modules in sequence:
+
+1. **IngestModule (Fetcher)**
+   - Role: Source of STAC items
+   - Action: Read items from `items.json` file
+   - Output: Stream of STAC item dictionaries
+
+2. **ValidateModule (Modifier)**
+   - Role: Transform/validate items in-flight
+   - Action: Check each item against STAC JSON schema
+   - Output: Only valid items pass through
+
+3. **OutputModule (Bundler)**
+   - Role: Sink for processed items
+   - Action: Write items to disk in self-contained collection structure
+   - Output: `collection.json` + individual item files
+
+### The Architecture
+
+This follows the **Pipes and Filters** pattern:
+- **Fetchers** → generate items (IngestModule)
+- **Modifiers** → process items (ValidateModule)
+- **Bundlers** → consume items (OutputModule)
+
+Data flows through the pipeline as an **async stream**, meaning STAC Manager can process millions of items without loading everything into memory.
+
+---
+
+## Common Issues
+
+### "Workflow validation failed"
+
+**Cause**: Invalid YAML syntax or missing required fields.
+
+**Fix**: Use the validation command to check your config:
+
+```bash
+stac-manager validate-workflow your-workflow.yaml
+```
+
+### "Module 'IngestModule' not found"
+
+**Cause**: STAC Manager not installed correctly.
+
+**Fix**: Reinstall:
+
+```bash
+pip install --upgrade stac-manager
+```
+
+### Permission denied writing to outputs/
+
+**Cause**: Insufficient write permissions.
+
+**Fix**: Use a different output directory:
+
+```yaml
+config:
+  base_dir: ~/my-outputs  # User home directory
+```
+
+---
+
+## Next Steps
+
+### Try Using a Real STAC API
+
+Modify the `ingest` step to fetch from Microsoft Planetary Computer:
+
+```yaml
+- id: ingest
+  module: IngestModule
+  config:
+    mode: api
+    url: https://planetarycomputer.microsoft.com/api/stac/v1
+    collections: [sentinel-2-l2a]
+    max_items: 10
+    bbox: [-122.5, 37.5, -122.0, 38.0]  # San Francisco Bay Area
+```
+
+Run the workflow again:
+
+```bash
+stac-manager run-workflow samples/HLSS30_2.0-api/workflows/00-quickstart.yaml
+```
+
+### Explore More Tutorials
+
+- **[Tutorial 01: Basic Pipeline](tutorials/01-basic-pipeline.md)** - Detailed walkthrough of Ingest → Validate → Output
+- **[Tutorial 02: Update Pipeline](tutorials/02-update-pipeline.md)** - Modify item properties in-flight
+- **[Tutorial 03: Extension Pipeline](tutorials/03-extension-pipeline.md)** - Add extensions and enrich with sidecar data
+
+---
+
+## Python API Alternative
+
+You can also run workflows programmatically:
+
+```python
+from stac_manager import StacManager
+from pathlib import Path
+
+# Load workflow
+workflow_path = Path("samples/HLSS30_2.0-api/workflows/00-quickstart.yaml")
+manager = StacManager.from_yaml(workflow_path)
+
+# Execute
+result = await manager.run()
+
+print(f"Processed {result.items_processed} items")
+print(f"Failures: {result.failure_count}")
+```
+
+See [Python API Documentation](../spec/stac-manager-v1.0.0/04-python-library-api.md) for details.
