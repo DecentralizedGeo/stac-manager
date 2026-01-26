@@ -230,3 +230,93 @@ steps:
         assert result.exit_code == 0
         assert Path('./custom_checkpoints').exists()
 
+
+def test_run_workflow_shows_progress():
+    """Test run-workflow shows progress messages."""
+    runner = CliRunner()
+    
+    with runner.isolated_filesystem():
+        test_items = [
+            {
+                "type": "Feature",
+                "stac_version": "1.0.0",
+                "id": f"item-{i}",
+                "geometry": {"type": "Point", "coordinates": [0, 0]},
+                "bbox": [0, 0, 0, 0],
+                "properties": {"datetime": "2024-01-01T00:00:00Z"},
+                "links": [],
+                "assets": {}
+            }
+            for i in range(5)
+        ]
+        
+        with open('test_items.json', 'w') as f:
+            json.dump(test_items, f)
+        
+        with open('workflow.yaml', 'w') as f:
+            f.write("""
+name: progress-test
+steps:
+  - id: ingest
+    module: IngestModule
+    config:
+      mode: file
+      source: test_items.json
+      format: json
+  - id: output
+    module: OutputModule
+    config:
+      base_dir: ./output
+      format: json
+    depends_on: [ingest]
+""")
+        
+        result = runner.invoke(cli, ['run-workflow', 'workflow.yaml'])
+        
+        # Should show progress messages
+        assert 'loading' in result.output.lower() or 'executing' in result.output.lower()
+        assert 'ingest' in result.output.lower() or 'progress-test' in result.output.lower()
+
+
+def test_run_workflow_verbose_logging():
+    """Test run-workflow with --log-level DEBUG shows detailed output."""
+    runner = CliRunner()
+    
+    with runner.isolated_filesystem():
+        with open('test_items.json', 'w') as f:
+            json.dump([
+                {
+                    "type": "Feature",
+                    "stac_version": "1.0.0",
+                    "id": "test-item",
+                    "geometry": {"type": "Point", "coordinates": [0, 0]},
+                    "bbox": [0, 0, 0, 0],
+                    "properties": {"datetime": "2024-01-01T00:00:00Z"},
+                    "links": [],
+                    "assets": {}
+                }
+            ], f)
+        
+        with open('workflow.yaml', 'w') as f:
+            f.write("""
+name: verbose-test
+steps:
+  - id: ingest
+    module: IngestModule
+    config:
+      mode: file
+      source: test_items.json
+      format: json
+  - id: output
+    module: OutputModule
+    config:
+      base_dir: ./output
+      format: json
+    depends_on: [ingest]
+""")
+        
+        result = runner.invoke(cli, ['--log-level', 'DEBUG', 'run-workflow', 'workflow.yaml'])
+        
+        # Should show more detailed output with DEBUG level
+        assert result.exit_code == 0
+

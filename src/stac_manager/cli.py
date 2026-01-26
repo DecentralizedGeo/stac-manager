@@ -9,6 +9,25 @@ from stac_manager.core import load_workflow_from_yaml, build_execution_order
 from stac_manager.exceptions import ConfigurationError
 
 
+def setup_logging(log_level: str):
+    """Configure logging for CLI."""
+    # Create console handler
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(getattr(logging, log_level.upper()))
+    
+    # Create formatter
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    console_handler.setFormatter(formatter)
+    
+    # Configure root logger
+    root_logger = logging.getLogger()
+    root_logger.setLevel(getattr(logging, log_level.upper()))
+    root_logger.addHandler(console_handler)
+
+
 @click.group()
 @click.version_option(version=__version__, prog_name='stac-manager')
 @click.option(
@@ -100,6 +119,9 @@ def run_workflow(ctx, config_file, checkpoint_dir, dry_run):
         config_file: Path to workflow YAML file
     """
     log_level = ctx.obj.get('log_level', 'INFO')
+    
+    # Setup logging
+    setup_logging(log_level)
     
     try:
         # Load workflow
