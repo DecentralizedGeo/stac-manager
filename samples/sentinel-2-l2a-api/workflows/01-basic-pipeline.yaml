@@ -1,0 +1,49 @@
+# Tutorial 01: Basic Pipeline - Fetching from a Live STAC API
+#
+# This workflow demonstrates real-world STAC data ingestion:
+# 1. IngestModule: Fetch items from Planetary Computer API
+# 2. ValidateModule: Validate items against STAC schema
+# 3. OutputModule: Persist to disk in collection structure
+#
+# Key concepts:
+# - API mode: Fetching live data instead of local files
+# - Spatial filtering: Limiting results to a geographic area
+# - Temporal filtering: Limiting results to a date range
+#
+# Run this workflow:
+#   stac-manager run-workflow samples/sentinel-2-l2a-api/workflows/01-basic-pipeline.yaml
+
+name: basic-pipeline
+version: "1.0"
+description: "API-based ingestion from Planetary Computer"
+
+steps:
+  # Step 1: Fetch items from live STAC API with spatial/temporal filters
+  - id: ingest
+    module: IngestModule
+    config:
+      mode: api
+      url: https://planetarycomputer.microsoft.com/api/stac/v1
+      collection_id: sentinel-2-l2a
+      max_items: 50
+      # San Francisco Bay Area, recent dates
+      bbox: [-122.5, 37.5, -122.0, 38.0]
+      datetime: 2024-01-01/2024-01-31
+
+  # Step 2: Validate against STAC schema
+  - id: validate
+    module: ValidateModule
+    depends_on: [ingest]
+    config:
+      strict: true
+      # Strict validation fails on any schema violations
+      # Set to false for lenient mode (warnings only)
+
+  # Step 3: Output to persistent collection structure
+  - id: output
+    module: OutputModule
+    depends_on: [validate]
+    config:
+      base_dir: ./outputs
+      format: json
+      collection_id: sentinel-2-l2a-tutorial-01
