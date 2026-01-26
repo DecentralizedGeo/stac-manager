@@ -3,6 +3,7 @@
 This script fetches real STAC items from public catalogs, converts them to
 multiple formats (JSON, Parquet), and generates sidecar data for tutorials.
 """
+import csv
 import json
 import logging
 from typing import Dict, List, Optional
@@ -112,6 +113,61 @@ def extract_collection_metadata(catalog_url: str, collection_id: str) -> Dict:
     return filtered
 
 
+def generate_sidecar_data(items: List[Dict]) -> Dict[str, Dict]:
+    """Generate sidecar data from STAC items.
+    
+    Extracts cloud cover and snow cover properties for use in tutorials.
+    
+    Args:
+        items: List of STAC item dictionaries
+        
+    Returns:
+        Dictionary mapping item_id to properties
+    """
+    sidecar = {}
+    
+    for item in items:
+        item_id = item["id"]
+        props = item.get("properties", {})
+        
+        sidecar[item_id] = {
+            "cloud_cover": props.get("eo:cloud_cover", 0.0),
+            "snow_cover": props.get("s2:snow_ice_percentage", 0.0)
+        }
+    
+    logger.info(f"Generated sidecar data for {len(sidecar)} items")
+    return sidecar
+
+
+def save_sidecar_formats(sidecar_data: Dict[str, Dict], json_path: Path, csv_path: Path) -> None:
+    """Save sidecar data in both JSON and CSV formats.
+    
+    Args:
+        sidecar_data: Dictionary of item_id -> properties
+        json_path: Path to output JSON file
+        csv_path: Path to output CSV file
+    """
+    # Save JSON (dict format)
+    json_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(json_path, 'w') as f:
+        json.dump(sidecar_data, f, indent=2)
+    
+    # Save CSV (flat format)
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(csv_path, 'w', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=["item_id", "cloud_cover", "snow_cover"])
+        writer.writeheader()
+        
+        for item_id, props in sidecar_data.items():
+            writer.writerow({
+                "item_id": item_id,
+                "cloud_cover": props["cloud_cover"],
+                "snow_cover": props["snow_cover"]
+            })
+    
+    logger.info(f"Saved sidecar data to {json_path} and {csv_path}")
+
+
 @click.command(name='generate-sample-data')
 @click.option(
     '--catalog-url',
@@ -145,6 +201,3 @@ def cli(catalog_url: str, collection: str, items: int, output_dir: str):
 
 if __name__ == '__main__':
     cli()
-
-
-
