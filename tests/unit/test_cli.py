@@ -2,6 +2,7 @@
 from click.testing import CliRunner
 from pathlib import Path
 import tempfile
+import json
 from stac_manager.cli import cli
 
 
@@ -109,4 +110,123 @@ def test_validate_workflow_file_not_found():
     
     assert result.exit_code != 0
     assert ('not found' in result.output.lower() or 'does not exist' in result.output.lower())
+
+
+def test_run_workflow_basic():
+    """Test run-workflow executes a simple workflow."""
+    runner = CliRunner()
+    
+    with runner.isolated_filesystem():
+        # Create test data
+        test_items = [
+            {
+                "type": "Feature",
+                "stac_version": "1.0.0",
+                "id": "test-item-1",
+                "geometry": {"type": "Point", "coordinates": [0, 0]},
+                "bbox": [0, 0, 0, 0],
+                "properties": {"datetime": "2024-01-01T00:00:00Z"},
+                "links": [],
+                "assets": {}
+            }
+        ]
+        
+        with open('test_items.json', 'w') as f:
+            json.dump(test_items, f)
+        
+        # Create workflow config
+        with open('workflow.yaml', 'w') as f:
+            f.write("""
+name: test-workflow
+steps:
+  - id: ingest
+    module: IngestModule
+    config:
+      mode: file
+      source: test_items.json
+      format: json
+  - id: output
+    module: OutputModule
+    config:
+      base_dir: ./output
+      format: json
+    depends_on: [ingest]
+""")
+        
+        # Run workflow
+        result = runner.invoke(cli, ['run-workflow', 'workflow.yaml'])
+        
+        # Should complete successfully
+        assert result.exit_code == 0
+        assert 'completed' in result.output.lower() or 'success' in result.output.lower()
+
+
+def test_run_workflow_dry_run():
+    """Test run-workflow --dry-run validates without executing."""
+    runner = CliRunner()
+    
+    with runner.isolated_filesystem():
+        with open('workflow.yaml', 'w') as f:
+            f.write("""
+name: dry-run-test
+steps:
+  - id: seed
+    module: SeedModule
+    config:
+      items: []
+""")
+        
+        result = runner.invoke(cli, ['run-workflow', '--dry-run', 'workflow.yaml'])
+        
+        assert result.exit_code == 0
+        assert 'dry' in result.output.lower() or 'would execute' in result.output.lower()
+
+
+def test_run_workflow_with_checkpoint_dir():
+    """Test run-workflow with custom checkpoint directory."""
+    runner = CliRunner()
+    
+    with runner.isolated_filesystem():
+        test_items = [
+            {
+                "type": "Feature",
+                "stac_version": "1.0.0",
+                "id": "test-item-1",
+                "geometry": {"type": "Point", "coordinates": [0, 0]},
+                "bbox": [0, 0, 0, 0],
+                "properties": {"datetime": "2024-01-01T00:00:00Z"},
+                "links": [],
+                "assets": {}
+            }
+        ]
+        
+        with open('test_items.json', 'w') as f:
+            json.dump(test_items, f)
+        
+        with open('workflow.yaml', 'w') as f:
+            f.write("""
+name: checkpoint-test
+steps:
+  - id: ingest
+    module: IngestModule
+    config:
+      mode: file
+      source: test_items.json
+      format: json
+  - id: output
+    module: OutputModule
+    config:
+      base_dir: ./output
+      format: json
+    depends_on: [ingest]
+""")
+        
+        result = runner.invoke(cli, [
+            'run-workflow',
+            '--checkpoint-dir', './custom_checkpoints',
+            'workflow.yaml'
+        ])
+        
+        assert result.exit_code == 0
+        assert Path('./custom_checkpoints').exists()
 
