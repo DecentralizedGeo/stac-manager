@@ -178,6 +178,7 @@ def save_sidecar_formats(sidecar_data: Dict[str, Dict], json_path: Path, csv_pat
 @click.option(
     '--collection',
     required=True,
+    default='sentinel-2-l2a',
     help='Collection ID to fetch (e.g., sentinel-2-l2a)'
 )
 @click.option(
