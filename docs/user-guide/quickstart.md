@@ -16,7 +16,7 @@ Run a simple workflow that:
 ## Prerequisites
 
 - STAC Manager installed ([Installation Guide](installation.md))
-- Sample data available (included in repo at `samples/HLSS30_2.0-api/`)
+- Sample data available (generate with `scripts/generate_sample_data.py`)
 
 ---
 
@@ -34,7 +34,7 @@ Expected output: `stac-manager, version 1.0.0`
 
 ## Step 2: Review the Workflow Configuration
 
-Open `samples/HLSS30_2.0-api/workflows/00-quickstart.yaml` to see the workflow definition:
+Open `samples/sentinel-2-l2a-api/workflows/00-quickstart.yaml` to see the workflow definition:
 
 ```yaml
 name: quickstart-pipeline
@@ -44,8 +44,8 @@ steps:
     module: IngestModule
     config:
       mode: file
-      path: samples/HLSS30_2.0-api/data/items.json
-      collection_id: HLSS30_2.0
+      source: samples/sentinel-2-l2a-api/data/items.json
+      collection_id: sentinel-2-l2a
 
   - id: validate
     module: ValidateModule
@@ -59,13 +59,13 @@ steps:
     config:
       base_dir: ./outputs
       format: json
-      collection_id: HLSS30_2.0
+      collection_id: sentinel-2-l2a
 ```
 
 **What this does:**
-- **IngestModule**: Reads STAC items from a local JSON file
+- **IngestModule**: Reads STAC items from a local JSON file (Sentinel-2 L2A collection)
 - **ValidateModule**: Checks each item against STAC schema (strict mode)
-- **OutputModule**: Writes validated items to `./outputs/HLSS30_2.0/`
+- **OutputModule**: Writes validated items to `./outputs/sentinel-2-l2a/`
 
 ---
 
@@ -74,7 +74,7 @@ steps:
 Execute the workflow using the CLI:
 
 ```bash
-stac-manager run-workflow samples/HLSS30_2.0-api/workflows/00-quickstart.yaml
+stac-manager run-workflow samples/sentinel-2-l2a-api/workflows/00-quickstart.yaml
 ```
 
 **Expected output:**
@@ -83,7 +83,7 @@ stac-manager run-workflow samples/HLSS30_2.0-api/workflows/00-quickstart.yaml
 Starting workflow: quickstart-pipeline
 [ingest] Loaded N items from file
 [validate] Validated N items (0 errors)
-[output] Wrote N items to ./outputs/HLSS30_2.0
+[output] Wrote N items to ./outputs/sentinel-2-l2a
 ✓ Workflow completed successfully
 ```
 
@@ -96,13 +96,13 @@ Starting workflow: quickstart-pipeline
 Check the output directory:
 
 ```bash
-ls -R outputs/HLSS30_2.0
+ls -R outputs/sentinel-2-l2a
 ```
 
 **You should see:**
 
 ```
-outputs/HLSS30_2.0/
+outputs/sentinel-2-l2a/
 ├── collection.json          # Collection metadata
 └── items/
     ├── item_1.json
@@ -113,7 +113,7 @@ outputs/HLSS30_2.0/
 **View a single item:**
 
 ```bash
-cat outputs/HLSS30_2.0/items/item_1.json | head -n 30
+cat outputs/sentinel-2-l2a/items/item_1.json | head -n 30
 ```
 
 ---
@@ -205,7 +205,7 @@ Modify the `ingest` step to fetch from Microsoft Planetary Computer:
 Run the workflow again:
 
 ```bash
-stac-manager run-workflow samples/HLSS30_2.0-api/workflows/00-quickstart.yaml
+stac-manager run-workflow samples/sentinel-2-l2a-api/workflows/00-quickstart.yaml
 ```
 
 ### Learn More

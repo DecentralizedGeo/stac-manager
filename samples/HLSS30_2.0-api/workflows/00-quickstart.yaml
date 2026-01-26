@@ -6,34 +6,34 @@
 # 3. OutputModule: Write to ./outputs directory
 #
 # Run this workflow:
-#   stac-manager run-workflow samples/HLSS30_2.0-api/workflows/00-quickstart.yaml
+#   stac-manager run-workflow samples/sentinel-2-l2a-api/workflows/00-quickstart.yaml
 
 name: quickstart-pipeline
 version: "1.0"
 description: "Minimal workflow for quickstart guide"
 
 steps:
-  # Step 1: Fetch STAC items from local file
-  - id: ingest
-    module: IngestModule
-    config:
-      mode: file
-      path: samples/HLSS30_2.0-api/data/items.json
-      collection_id: HLSS30_2.0
+# Step 1: Fetch STAC items from local file
+- id: ingest
+  module: IngestModule
+  config:
+    mode: file
+    source: samples/sentinel-2-l2a-api/data/items.json
+    collection_id: sentinel-2-l2a
 
-  # Step 2: Validate items against STAC schema
-  - id: validate
-    module: ValidateModule
-    depends_on: [ingest]
-    config:
-      strict: true
-      # Strict mode: Fail on any validation errors
+# Step 2: Validate items against STAC schema
+- id: validate
+  module: ValidateModule
+  depends_on: [ ingest ]
+  config:
+    strict: true
+    # Strict mode: Fail on any validation errors
 
-  # Step 3: Output validated items to JSON
-  - id: output
-    module: OutputModule
-    depends_on: [validate]
-    config:
-      base_dir: ./outputs
-      format: json
-      collection_id: HLSS30_2.0
+    # Step 3: Output validated items to JSON
+- id: output
+  module: OutputModule
+  depends_on: [ validate ]
+  config:
+    base_dir: ./outputs
+    format: json
+    collection_id: sentinel-2-l2a
