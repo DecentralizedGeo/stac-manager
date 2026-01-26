@@ -1,6 +1,6 @@
 # STAC Manager
 
-**Modular Pipeline Orchestration for STAC Catalogs**
+**Modular Pipeline Orchestration for STAC Collections**
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -9,7 +9,7 @@
 
 ## What is STAC Manager?
 
-STAC Manager is a Python library for building, orchestrating, and executing modular STAC data pipelines. It enables you to ingest STAC items from APIs or files, transform and enrich metadata, validate compliance, apply extensions, and output to various formats—all through declarative YAML configuration or a programmatic Python API.
+STAC Manager is a Python library for building, orchestrating, and executing modular STAC data pipelines. It enables you to ingest STAC items from APIs or files, transform and enrich Item metadata, validate Item compliance, extend Items with extension properties, and output to various formats—all through declarative YAML configuration or a programmatic Python API.
 
 Built on the **Pipes and Filters** architecture, STAC Manager provides 7 specialized modules that compose into powerful workflows while maintaining simplicity and testability.
 
@@ -37,8 +37,8 @@ steps:
     module: IngestModule
     config:
       mode: api
-      url: https://planetarycomputer.microsoft.com/api/stac/v1
-      collections: [sentinel-2-l2a]
+      source: https://planetarycomputer.microsoft.com/api/stac/v1
+      collection_id: sentinel-2-l2a
       max_items: 100
 
   - id: validate
@@ -99,28 +99,8 @@ stac-manager --version
 
 - 📖 **[Installation Guide](docs/user-guide/installation.md)** - Detailed setup instructions
 - 🚀 **[Quickstart](docs/user-guide/quickstart.md)** - Run your first workflow in 5 minutes
-- 📚 **[Tutorials](docs/user-guide/tutorials/)** - Progressive examples from basic to advanced
+- 📚 **[Architecture Guide](docs/spec/stac-manager-v1.0.0/00-system-overview.md)** - Pipes and Filters model
 - 🔧 **[Module Reference](docs/spec/stac-manager-v1.0.0/)** - Complete module documentation
-
----
-
-## Project Status
-
-**Current Version**: 1.0.0 (Stable)
-
-✅ **Implemented**:
-- Phase 1: Utilities Foundation
-- Phase 2: Pipeline Modules (7 modules)
-- Phase 3: Orchestration Layer (CLI, Checkpoints, Matrix)
-- Phase 4: End-User Documentation
-
-📋 **Roadmap**: See [ROADMAP.md](docs/plans/2026-01-22-stac-manager-roadmap.md) for future features.
-
----
-
-## Contributing
-
-Contributions welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ---
 

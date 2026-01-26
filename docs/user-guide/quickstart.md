@@ -63,6 +63,7 @@ steps:
 ```
 
 **What this does:**
+
 - **IngestModule**: Reads STAC items from a local JSON file (Sentinel-2 L2A collection)
 - **ValidateModule**: Checks each item against STAC schema (strict mode)
 - **OutputModule**: Writes validated items to `./outputs/sentinel-2-l2a/`
@@ -196,8 +197,8 @@ Modify the `ingest` step to fetch from Microsoft Planetary Computer:
   module: IngestModule
   config:
     mode: api
-    url: https://planetarycomputer.microsoft.com/api/stac/v1
-    collections: [sentinel-2-l2a]
+    source: https://planetarycomputer.microsoft.com/api/stac/v1
+    collection_id: sentinel-2-l2a
     max_items: 10
     bbox: [-122.5, 37.5, -122.0, 38.0]  # San Francisco Bay Area
 ```
