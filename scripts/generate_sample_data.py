@@ -192,11 +192,99 @@ def save_sidecar_formats(sidecar_data: Dict[str, Dict], json_path: Path, csv_pat
     type=click.Path(),
     help='Output directory for samples (default: samples/)'
 )
-def cli(catalog_url: str, collection: str, items: int, output_dir: str):
+@click.option(
+    '--bbox',
+    default=None,
+    type=str,
+    help='Bounding box as comma-separated [west,south,east,north]'
+)
+@click.option(
+    '--datetime',
+    default=None,
+    type=str,
+    help='Datetime filter in ISO8601 format (e.g., 2023-08-01/2023-08-07)'
+)
+def cli(catalog_url: str, collection: str, items: int, output_dir: str, bbox: Optional[str], datetime: Optional[str]):
     """Generate sample STAC data for documentation and tutorials."""
+    logging.basicConfig(level=logging.INFO)
+    
     click.echo(f"Generating {items} items for collection: {collection}")
     click.echo(f"Catalog: {catalog_url}")
     click.echo(f"Output directory: {output_dir}")
+    
+    # Setup paths
+    output_root = Path(output_dir)
+    collection_dir = output_root / f"{collection}-api"
+    data_dir = collection_dir / "data"
+    sidecar_dir = collection_dir / "sidecar-data"
+    
+    # Parse bbox if provided
+    bbox_list = None
+    if bbox:
+        try:
+            bbox_list = [float(v) for v in bbox.split(',')]
+            if len(bbox_list) != 4:
+                raise ValueError("bbox must have 4 values")
+        except ValueError as e:
+            click.secho(f"Error parsing bbox: {e}", fg="red")
+            raise click.Exit(1)
+    
+    try:
+        # Fetch items from API
+        click.echo(f"\n📥 Fetching items...")
+        items_data = fetch_stac_items(
+            catalog_url=catalog_url,
+            collection_id=collection,
+            max_items=items,
+            bbox=bbox_list,
+            datetime=datetime
+        )
+        click.secho(f"✓ Fetched {len(items_data)} items", fg="green")
+        
+        # Save as JSON
+        click.echo(f"\n💾 Saving formats...")
+        json_path = data_dir / "items.json"
+        save_items_as_json(items_data, json_path)
+        click.secho(f"✓ Saved JSON: {json_path}", fg="green")
+        
+        # Convert to Parquet
+        parquet_path = data_dir / "items.parquet"
+        convert_to_parquet(json_path, parquet_path)
+        click.secho(f"✓ Saved Parquet: {parquet_path}", fg="green")
+        
+        # Extract collection metadata
+        click.echo(f"\n📋 Extracting collection metadata...")
+        collection_metadata = extract_collection_metadata(catalog_url, collection)
+        collection_path = data_dir / "collection.json"
+        collection_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(collection_path, 'w') as f:
+            json.dump(collection_metadata, f, indent=2)
+        click.secho(f"✓ Saved metadata: {collection_path}", fg="green")
+        
+        # Generate sidecar data
+        click.echo(f"\n📊 Generating sidecar data...")
+        sidecar_data = generate_sidecar_data(items_data)
+        save_sidecar_formats(
+            sidecar_data,
+            sidecar_dir / "cloud-cover.json",
+            sidecar_dir / "cloud-cover.csv"
+        )
+        click.secho(f"✓ Saved sidecar data to {sidecar_dir}", fg="green")
+        
+        click.secho(f"\n✅ Sample data generated successfully!", fg="green")
+        click.echo(f"\n📍 Location: {collection_dir}")
+        click.echo(f"   ├── data/")
+        click.echo(f"   │   ├── items.json")
+        click.echo(f"   │   ├── items.parquet")
+        click.echo(f"   │   └── collection.json")
+        click.echo(f"   └── sidecar-data/")
+        click.echo(f"       ├── cloud-cover.json")
+        click.echo(f"       └── cloud-cover.csv")
+        
+    except Exception as e:
+        click.secho(f"\n❌ Error: {e}", fg="red")
+        logger.exception("Sample data generation failed")
+        raise click.Exit(1)
 
 
 if __name__ == '__main__':
