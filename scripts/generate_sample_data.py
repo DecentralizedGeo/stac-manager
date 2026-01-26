@@ -3,10 +3,13 @@
 This script fetches real STAC items from public catalogs, converts them to
 multiple formats (JSON, Parquet), and generates sidecar data for tutorials.
 """
+import json
 import logging
 from typing import Dict, List, Optional
 
 import click
+import pyarrow.parquet as pq
+import stac_geoparquet
 from pathlib import Path
 from pystac_client import Client
 
@@ -53,6 +56,62 @@ def fetch_stac_items(
     return items
 
 
+def save_items_as_json(items: List[Dict], output_path: Path) -> None:
+    """Save STAC items to JSON file.
+    
+    Args:
+        items: List of STAC item dictionaries
+        output_path: Path to output JSON file
+    """
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    with open(output_path, 'w') as f:
+        json.dump(items, f, indent=2)
+    
+    logger.info(f"Saved {len(items)} items to {output_path}")
+
+
+def convert_to_parquet(json_path: Path, parquet_path: Path) -> None:
+    """Convert JSON STAC items to Parquet format.
+    
+    Args:
+        json_path: Path to input JSON file
+        parquet_path: Path to output Parquet file
+    """
+    with open(json_path) as f:
+        items = json.load(f)
+    
+    # Use stac-geoparquet for conversion to GeoDataFrame, then to Parquet
+    gdf = stac_geoparquet.to_geodataframe(items)
+    
+    parquet_path.parent.mkdir(parents=True, exist_ok=True)
+    gdf.to_parquet(parquet_path)
+    
+    logger.info(f"Converted {len(items)} items to Parquet: {parquet_path}")
+
+
+def extract_collection_metadata(catalog_url: str, collection_id: str) -> Dict:
+    """Extract minimal collection metadata from catalog.
+    
+    Args:
+        catalog_url: STAC API root URL
+        collection_id: Collection ID
+        
+    Returns:
+        Filtered collection dictionary
+    """
+    client = Client.open(catalog_url)
+    collection = client.get_collection(collection_id)
+    full_metadata = collection.to_dict()
+    
+    # Keep only essential fields
+    essential_fields = ["id", "description", "extent", "license", "stac_version", "type"]
+    filtered = {k: v for k, v in full_metadata.items() if k in essential_fields}
+    
+    logger.info(f"Extracted collection metadata for {collection_id}")
+    return filtered
+
+
 @click.command(name='generate-sample-data')
 @click.option(
     '--collection',
@@ -79,4 +138,6 @@ def cli(collection: str, items: int, output_dir: str):
 
 if __name__ == '__main__':
     cli()
+
+
 
