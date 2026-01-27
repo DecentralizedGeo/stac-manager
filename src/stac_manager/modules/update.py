@@ -3,9 +3,30 @@ import json
 from pathlib import Path
 from stac_manager.modules.config import UpdateConfig
 from stac_manager.core.context import WorkflowContext
-from stac_manager.utils.field_ops import deep_merge
+from stac_manager.utils.field_ops import deep_merge, expand_wildcard_paths
 from stac_manager.exceptions import ConfigurationError, DataProcessingError
 from datetime import datetime, timezone
+
+
+def dot_notation_to_nested(dot_dict: dict) -> dict:
+    """
+    Convert dot-notation dictionary to nested dictionary structure.
+    
+    Args:
+        dot_dict: Dictionary with dot-notation keys
+        
+    Returns:
+        Nested dictionary
+        
+    Example:
+        {"properties.platform": "sentinel-2"}
+        -> {"properties": {"platform": "sentinel-2"}}
+    """
+    from stac_manager.utils.field_ops import set_nested_field
+    result = {}
+    for key, value in dot_dict.items():
+        set_nested_field(result, key, value)
+    return result
 
 
 def set_field_with_path_creation(item: dict, path: str, value: Any, create_paths: bool) -> None:
@@ -60,7 +81,7 @@ class UpdateModule:
 
         Args:
             item: STAC item dict
-            context: Workflow context
+            context: Workflow context (used for wildcard expansion context values)
             
         Returns:
             Modified item dict
@@ -81,9 +102,20 @@ class UpdateModule:
                     if parts[-1] in target:
                         del target[parts[-1]]
         
-        # 2. Apply global field updates
+        # 2. Apply global field updates (with wildcard expansion)
         if self.config.updates:
-            for field_path, value in self.config.updates.items():
+            # Expand wildcards to actual paths in this item
+            expanded_updates = expand_wildcard_paths(
+                self.config.updates,
+                item,
+                context={
+                    "item_id": item.get("id"),
+                    "collection_id": item.get("collection")
+                }
+            )
+            
+            # Apply each expanded update
+            for field_path, value in expanded_updates.items():
                 set_field_with_path_creation(
                     item,
                     field_path,

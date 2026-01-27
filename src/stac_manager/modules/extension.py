@@ -6,7 +6,27 @@ from typing import Any
 from stac_manager.modules.config import ExtensionConfig
 from stac_manager.core.context import WorkflowContext
 from stac_manager.exceptions import ConfigurationError
-from stac_manager.utils.field_ops import deep_merge
+from stac_manager.utils.field_ops import deep_merge, set_nested_field, expand_wildcard_paths
+
+
+def dot_notation_to_nested(dot_dict: dict) -> dict:
+    """
+    Convert dot-notation dictionary to nested dictionary structure.
+    
+    Args:
+        dot_dict: Dictionary with dot-notation keys
+        
+    Returns:
+        Nested dictionary
+        
+    Example:
+        {"assets.thumbnail.alternate.s3.href": "s3://bucket/"}
+        -> {"assets": {"thumbnail": {"alternate": {"s3": {"href": "s3://bucket/"}}}}}
+    """
+    result = {}
+    for key, value in dot_dict.items():
+        set_nested_field(result, key, value)
+    return result
 
 
 class ExtensionModule:
@@ -42,9 +62,18 @@ class ExtensionModule:
         # Build template
         self.template = self._build_template(self.schema)
         
-        # Apply user defaults over template
-        if self.config.defaults:
-            self.template = deep_merge(self.template, self.config.defaults, strategy='overwrite')
+        # Store raw defaults (will be expanded per-item to support wildcards)
+        self.raw_defaults = self.config.defaults or {}
+            
+        # Apply non-wildcard defaults to template
+        if self.raw_defaults:
+            non_wildcard_defaults = {k: v for k, v in self.raw_defaults.items() if "*" not in k}
+            if non_wildcard_defaults:
+                if any("." in key for key in non_wildcard_defaults.keys()):
+                    nested_defaults = dot_notation_to_nested(non_wildcard_defaults)
+                else:
+                    nested_defaults = non_wildcard_defaults
+                self.template = deep_merge(self.template, nested_defaults, strategy='overwrite')
     
     def _resolve_ref(self, ref: str, schema: dict) -> dict:
         """
@@ -186,7 +215,7 @@ class ExtensionModule:
                 strategy='keep_existing'
             )
         
-        # 3. Apply assets template
+        # 3. Apply assets template (with user defaults)
         if "assets" in self.template:
             asset_template = self.template["assets"].get("*", {})
             
@@ -196,12 +225,38 @@ class ExtensionModule:
                 default_asset = pystac.Asset(href="Asset reference", title="Asset title")
                 item["assets"] = {"AssetId": default_asset.to_dict()}
             
-            # Extend all assets
+            # Extend all assets with the template
             for asset_key in item["assets"]:
                 item["assets"][asset_key] = deep_merge(
                     item["assets"][asset_key],
                     asset_template,
                     strategy='keep_existing'
                 )
+        
+        # 4. Expand and apply wildcard defaults (per-item, supports template variables)
+        # Only expand defaults that contain wildcards or dot-notation paths
+        if self.raw_defaults:
+            # Filter to only wildcard or dot-notation defaults (exclude nested dict defaults)
+            expandable_defaults = {
+                k: v for k, v in self.raw_defaults.items() 
+                if "*" in k or "." in k
+            }
+            
+            if expandable_defaults:
+                # Expand wildcards to actual paths in this item
+                expanded_defaults = expand_wildcard_paths(
+                    expandable_defaults,
+                    item,
+                    context={
+                        "item_id": item.get("id"),
+                        "collection_id": item.get("collection")
+                    }
+                )
+                
+                # Apply each expanded path individually to preserve unique values per asset
+                if expanded_defaults:
+                    from stac_manager.utils.field_ops import set_nested_field
+                    for path, value in expanded_defaults.items():
+                        set_nested_field(item, path, value)
         
         return item
