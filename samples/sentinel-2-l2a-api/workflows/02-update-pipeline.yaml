@@ -17,49 +17,41 @@
 name: update-pipeline
 version: "1.0"
 description: "Modify item properties in-flight"
+resume_from_checkpoint: false # Set to true to resume from existing checkpoints
 
 steps:
-  # Step 1: Fetch items from local file
-  - id: ingest
-    module: IngestModule
-    config:
-      mode: file
-      source: samples/sentinel-2-l2a-api/data/items.json
-      collection_id: sentinel-2-l2a
+# Step 1: Fetch items from local file
+- id: ingest
+  module: IngestModule
+  config:
+    mode: file
+    source: samples/sentinel-2-l2a-api/data/items.json
+    collection_id: sentinel-2-l2a
 
-  # Step 2: Modify item properties in-flight
-  - id: modify
-    module: ModifyModule
-    depends_on: [ingest]
-    config:
-      operations:
-        # Add a custom field to track processing
-        - type: add_property
-          path: properties.processed
-          value: true
+# Step 2: Use an UpdateModule to modify item properties in-flight 
+- id: update
+  module: UpdateModule
+  depends_on: [ ingest ]
+  config:
+    mode: merge
+    updates:
+      properties.processed: true
+      properties.processing_date: "2024-01-26T00:00:00Z"
+      properties.processing_note: "Processed via tutorial 02 workflow"
+    create_missing_paths: true
+    auto_update_timestamp: true
 
-        # Add a timestamp
-        - type: add_property
-          path: properties.processing_date
-          value: "2024-01-26T00:00:00Z"
+# Step 3: Validate modified items
+- id: validate
+  module: ValidateModule
+  depends_on: [ update ]
+  config:
+    strict: true
 
-        # Update existing property (example: add processing note)
-        - type: add_property
-          path: properties.processing_note
-          value: "Processed via tutorial 02 workflow"
-
-  # Step 3: Validate modified items
-  - id: validate
-    module: ValidateModule
-    depends_on: [modify]
-    config:
-      strict: true
-
-  # Step 4: Output to persistent collection structure
-  - id: output
-    module: OutputModule
-    depends_on: [validate]
-    config:
-      base_dir: ./outputs
-      format: json
-      collection_id: sentinel-2-l2a-tutorial-02
+# Step 4: Output to persistent collection structure
+- id: output
+  module: OutputModule
+  depends_on: [ validate ]
+  config:
+    base_dir: ./outputs/tutorial-02
+    format: json

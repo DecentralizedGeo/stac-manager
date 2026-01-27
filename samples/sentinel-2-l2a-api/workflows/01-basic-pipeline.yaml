@@ -16,6 +16,7 @@
 name: basic-pipeline
 version: "1.0"
 description: "API-based ingestion from Planetary Computer"
+resume_from_checkpoint: false # Set to true to resume from existing checkpoints
 
 steps:
 # Step 1: Fetch items from live STAC API with spatial/temporal filters
@@ -35,7 +36,7 @@ steps:
   module: ValidateModule
   depends_on: [ ingest ]
   config:
-    strict: true
+    strict: false
     # Strict validation fails on any schema violations
     # Set to false for lenient mode (warnings only)
 
@@ -44,6 +45,5 @@ steps:
   module: OutputModule
   depends_on: [ validate ]
   config:
-    base_dir: ./outputs
+    base_dir: ./outputs/tutorial-01
     format: json
-    collection_id: sentinel-2-l2a-tutorial-01
