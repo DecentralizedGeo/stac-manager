@@ -64,5 +64,4 @@ class OutputConfig(BaseModel):
     format: Literal["json", "parquet"] = Field(description="Output format")
     base_dir: str = Field(description="Base output directory")
     buffer_size: int = Field(default=1000, description="Items to buffer before flushing")
-    base_url: Optional[str] = Field(default=None, description="Base URL for item links")
-    include_collection: bool = Field(default=False, description="Write collection.json")
+    base_url: Optional[str] = Field(default=None, description="Base URL for item links (reserved for future use)")
