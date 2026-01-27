@@ -139,47 +139,6 @@ config:
 
 ---
 
-### ModifyModule (Filter)
-
-**Purpose**: Transform item properties in-flight
-
-**Operations:**
-
-```yaml
-module: ModifyModule
-config:
-  operations:
-    # Add or update properties
-    - type: add_property
-      path: properties.custom_field
-      value: "processed"
-
-    # Rename properties
-    - type: rename_property
-      from_path: properties.old_name
-      to_path: properties.new_name
-
-    # Remove properties
-    - type: delete_property
-      path: properties.obsolete_field
-
-    # Conditional operations
-    - type: conditional_property
-      condition: "properties.eo:cloud_cover < 20"
-      path: properties.is_clear
-      value: true
-```
-
-**Output**: Modified items
-
-**When to use:**
-
-- Add processing metadata
-- Standardize property names
-- Filter by computed conditions
-
----
-
 ### ExtensionModule (Modifier)
 
 **Purpose**: Add STAC extensions to items using schema-driven scaffolding
@@ -429,14 +388,9 @@ steps:
     module: IngestModule
     config: {...}
 
-  - id: modify
-    module: ModifyModule
-    depends_on: [ingest]
-    config: {...}
-
-  - id: extend
+  - id: add-extension
     module: ExtensionModule
-    depends_on: [modify]
+    depends_on: [add-extension]
     config: {...}
 
   - id: enrich
@@ -811,27 +765,16 @@ steps:
       mode: file
       source: raw-data/items.json
 
-  - id: filter
-    module: ModifyModule
+  - id: add-extension
+    module: ExtensionModule
     depends_on: [ingest]
     config:
-      operations:
-        - type: conditional_property
-          condition: "properties.eo:cloud_cover < 20"
-          path: properties.passes_filter
-          value: true
-
-  - id: extend
-    module: ExtensionModule
-    depends_on: [filter]
-    config:
-      extensions:
-        - name: eo
-        - name: projection
+      schema_uri: "https://stac-extensions.github.io/eo/v2.0.0/schema.json"
+      required_fields_only: true
 
   - id: validate
     module: ValidateModule
-    depends_on: [extend]
+    depends_on: [add-extension]
     config:
       strict: true
 
@@ -873,4 +816,3 @@ steps:
 - [Module Reference](../../spec/stac-manager-v1.0.0/03-module-reference.md)
 - [Configuration Guide](../../spec/stac-manager-v1.0.0/02-configuration-schema.md)
 - [Python API](../../spec/stac-manager-v1.0.0/04-python-library-api.md)
-
