@@ -9,6 +9,7 @@ Learn how to enrich STAC items with standardized extensions and external data so
 This tutorial builds on [Tutorial 02](02-update-pipeline.md) by introducing **STAC Extensions** and **data enrichment** - adding standardized metadata and merging with external data sources.
 
 **What you'll learn:**
+
 - How to add STAC extensions to items (EO, Projection, Raster)
 - How to merge sidecar data (external CSV/JSON) with items
 - Real-world data enrichment patterns
@@ -63,14 +64,15 @@ steps:
             type: "COG"
 
   - id: enrich
-    module: EnrichModule
+    module: TransformModule
     depends_on: [extend]
     config:
-      sidecar_source: samples/sentinel-2-l2a-api/sidecar-data/cloud-cover.json
-      merge_key: item_id
-      properties_to_merge:
-        - cloud_cover
-        - snow_cover
+      input_file: samples/sentinel-2-l2a-api/sidecar-data/cloud-cover.json
+      sidecar_id_path: "id"
+      strategy: "merge"
+      field_mapping:
+        cloud_cover: "cloud_cover"
+        snow_cover: "snow_cover"
 
   - id: validate
     module: ValidateModule
@@ -98,7 +100,7 @@ IngestModule (Local File)
         ↓
    20 Extended Items
         ↓
-   EnrichModule (Merge with Sidecar Data)
+   TransformModule (Merge with Sidecar Data)
         ↓
    20 Enriched Items
         ↓
@@ -153,42 +155,91 @@ STAC Extensions are standardized schemas that add domain-specific properties to 
 
 ### ExtensionModule in Detail
 
-The ExtensionModule adds extensions to items:
+The ExtensionModule adds extensions to items using schema-driven scaffolding:
 
 ```yaml
-- id: extend
+- id: add_alternate_assets
   module: ExtensionModule
   depends_on: [ingest]
   config:
-    extensions:
-      # Add EO extension with band information
-      - name: eo
-        properties:
-          bands:
-            - name: "B2"
-              description: "Blue"
-              common_name: "blue"
-              center_wavelength: 0.490
-              full_width_half_max: 0.098
-            - name: "B3"
-              description: "Green"
-              common_name: "green"
-              center_wavelength: 0.560
-              full_width_half_max: 0.045
-
-      # Add Projection extension
-      - name: projection
-        properties:
-          epsg: 32633          # UTM zone 33N
-          wkt2: "..."          # Optional WKT representation
-          proj4: "+proj=utm..."
-
-      # Add View extension (viewing geometry)
-      - name: view
-        properties:
-          incidence_angle: 10.5
-          azimuth: 180.0
+    schema_uri: "https://stac-extensions.github.io/alternate-assets/v1.2.0/schema.json"
+    defaults:
+      # Use wildcards to apply to ALL assets
+      assets.*.alternate.s3.href: "s3://example-bucket/{collection_id}/{asset_key}/"
+      assets.*.alternate.s3.alternate:name: "S3"
+      assets.*.alternate:name: "HTTPS"
+    required_fields_only: true
 ```
+
+**Key Features (New in v1.1.0):**
+
+#### Wildcard Syntax
+
+The `assets.*` wildcard matches **all assets** in an item, eliminating the need to specify each asset individually:
+
+```yaml
+# Without wildcards (verbose)
+defaults:
+  assets.visual.alternate.s3.href: "s3://bucket/visual/"
+  assets.B04.alternate.s3.href: "s3://bucket/B04/"
+  assets.B08.alternate.s3.href: "s3://bucket/B08/"
+  # ... repeat for 20+ assets
+
+# With wildcards (concise)
+defaults:
+  assets.*.alternate.s3.href: "s3://bucket/{asset_key}/"
+```
+
+#### Template Variables
+
+Template variables are dynamically replaced for each item/asset:
+
+- **`{item_id}`** - The item's ID (e.g., `"S2A_MSIL2A_20240101..."`)
+- **`{collection_id}`** - The collection ID (e.g., `"sentinel-2-l2a"`)
+- **`{asset_key}`** - The asset's key name (e.g., `"visual"`, `"B04"`, `"B08"`)
+
+**Example:**
+
+For an item with ID `S2A_001` in collection `sentinel-2-l2a` with assets `visual` and `B04`:
+
+```yaml
+assets.*.alternate.s3.href: "s3://my-bucket/{collection_id}/{asset_key}/"
+```
+
+Expands to:
+
+```json
+{
+  "assets": {
+    "visual": {
+      "alternate": {
+        "s3": {
+          "href": "s3://my-bucket/sentinel-2-l2a/visual/"
+        }
+      }
+    },
+    "B04": {
+      "alternate": {
+        "s3": {
+          "href": "s3://my-bucket/sentinel-2-l2a/B04/"
+        }
+      }
+    }
+  }
+}
+```
+
+#### Schema-Driven Scaffolding
+
+The ExtensionModule automatically:
+
+1. **Fetches** the JSON Schema from `schema_uri`
+2. **Parses** the schema structure
+3. **Scaffolds** required fields with null values
+4. **Applies** your defaults using wildcards and template variables
+5. **Tags** items with the extension URI in `stac_extensions`
+
+This approach is much simpler than the old method of manually adding extension properties!
 
 ---
 
@@ -198,7 +249,8 @@ The ExtensionModule adds extensions to items:
 
 "Sidecar data" is external data (CSV, JSON) that supplements main STAC items. Examples:
 
-**cloud-cover.json:**
+**cloud-cover.json (Dict format - keys are item IDs):**
+
 ```json
 {
   "S2A_MSIL2A_20240101T000000_001": {
@@ -212,39 +264,60 @@ The ExtensionModule adds extensions to items:
 }
 ```
 
-**cloud-cover.csv:**
-```
-item_id,cloud_cover,snow_cover
-S2A_MSIL2A_20240101T000000_001,15.3,2.1
-S2A_MSIL2A_20240102T000000_002,8.7,0.0
+**cloud-cover.json (List format - with id field):**
+
+```json
+[
+  {
+    "id": "S2A_MSIL2A_20240101T000000_001",
+    "cloud_cover": 15.3,
+    "snow_cover": 2.1
+  },
+  {
+    "id": "S2A_MSIL2A_20240102T000000_002",
+    "cloud_cover": 8.7,
+    "snow_cover": 0.0
+  }
+]
 ```
 
-### EnrichModule in Detail
+> **Note**: TransformModule only supports JSON format, not CSV.
 
-The EnrichModule merges sidecar data with items:
+### TransformModule in Detail
+
+The TransformModule merges sidecar data with items:
 
 ```yaml
 - id: enrich
-  module: EnrichModule
+  module: TransformModule
   depends_on: [extend]
   config:
-    # Source of sidecar data (JSON or CSV)
-    sidecar_source: samples/sentinel-2-l2a-api/sidecar-data/cloud-cover.json
+    # Source of sidecar data (JSON file)
+    input_file: samples/sentinel-2-l2a-api/sidecar-data/cloud-cover.json
 
-    # Key to match items with sidecar records
-    merge_key: item_id
+    # How to merge: 'merge' (keep existing) or 'update' (overwrite)
+    strategy: "merge"
 
-    # Properties to extract and merge
-    properties_to_merge:
-      - cloud_cover
-      - snow_cover
+    # Optional: Map sidecar fields to item properties
+    # Key = target field name in item properties
+    # Value = JMESPath query applied to sidecar entry
+    field_mapping:
+      cloud_cover: "cloud_cover"  # item.properties.cloud_cover ← sidecar_entry.cloud_cover
+      snow_cover: "snow_cover"    # item.properties.snow_cover ← sidecar_entry.snow_cover
 
-    # Optional: namespace to separate enrichment
-    namespace: sidecar
-
-    # Optional: only merge if condition is met
-    condition: "sidecar.cloud_cover < 30"
+    # Optional: How to handle missing sidecar data
+    handle_missing: "ignore"  # or 'warn', 'error'
 ```
+
+**How field_mapping works:**
+
+For dict format sidecar data (keys are item IDs), TransformModule:
+
+1. Looks up item ID in sidecar data
+2. Applies JMESPath queries to the sidecar entry
+3. Merges results into `item.properties` using the mapping keys
+
+**Note**: `sidecar_id_path` is only needed for list format sidecar data. Dict format automatically uses keys as item IDs.
 
 After enrichment, each item includes the merged properties:
 
@@ -266,7 +339,7 @@ After enrichment, each item includes the merged properties:
 
 ### Pattern 1: Quality Metrics from External Database
 
-Merge quality scores from a CSV:
+Merge quality scores from a JSON file:
 
 ```yaml
 steps:
@@ -275,15 +348,17 @@ steps:
     # ...
 
   - id: enrich_quality
-    module: EnrichModule
+    module: TransformModule
     depends_on: [ingest]
     config:
-      sidecar_source: data/quality-metrics.csv
-      merge_key: item_id
-      properties_to_merge:
-        - quality_score
-        - processing_level
-        - validation_status
+      input_file: data/quality-metrics.json
+      sidecar_id_path: "id"
+      strategy: "merge"
+      field_mapping:
+        quality_score: "quality_score"
+        processing_level: "processing_level"
+        validation_status: "validation_status"
+      handle_missing: "warn"
 
   - id: output
     module: OutputModule
@@ -292,11 +367,21 @@ steps:
       base_dir: ./outputs
 ```
 
-**data/quality-metrics.csv:**
-```
-item_id,quality_score,processing_level,validation_status
-S2A_MSI...,0.95,L2A,passed
-S2B_MSI...,0.87,L2A,passed
+**data/quality-metrics.json:**
+
+```json
+{
+  "S2A_MSI...": {
+    "quality_score": 0.95,
+    "processing_level": "L2A",
+    "validation_status": "passed"
+  },
+  "S2B_MSI...": {
+    "quality_score": 0.87,
+    "processing_level": "L2A",
+    "validation_status": "passed"
+  }
+}
 ```
 
 ### Pattern 2: Multiple Sidecar Sources
@@ -311,25 +396,27 @@ steps:
 
   # First enrichment: Cloud cover
   - id: enrich_clouds
-    module: EnrichModule
+    module: TransformModule
     depends_on: [ingest]
     config:
-      sidecar_source: data/cloud-cover.json
-      merge_key: item_id
-      properties_to_merge:
-        - eo:cloud_cover
-        - snow_ice_percentage
+      input_file: data/cloud-cover.json
+      sidecar_id_path: "id"
+      strategy: "merge"
+      field_mapping:
+        eo:cloud_cover: "eo:cloud_cover"
+        snow_ice_percentage: "snow_ice_percentage"
 
   # Second enrichment: Processing metadata
   - id: enrich_metadata
-    module: EnrichModule
+    module: TransformModule
     depends_on: [enrich_clouds]
     config:
-      sidecar_source: data/processing-metadata.csv
-      merge_key: item_id
-      properties_to_merge:
-        - processor_version
-        - processing_date
+      input_file: data/processing-metadata.json
+      sidecar_id_path: "id"
+      strategy: "merge"
+      field_mapping:
+        processor_version: "processor_version"
+        processing_date: "processing_date"
 
   - id: output
     module: OutputModule
@@ -337,24 +424,56 @@ steps:
     # ...
 ```
 
-### Pattern 3: Conditional Enrichment
+### Pattern 3: Using JMESPath in field_mapping
 
-Only merge data matching certain conditions:
+Extract nested fields from sidecar data using JMESPath queries:
 
 ```yaml
 - id: enrich
-  module: EnrichModule
+  module: TransformModule
   depends_on: [ingest]
   config:
-    sidecar_source: data/calibration.json
-    merge_key: item_id
-    properties_to_merge:
-      - calibration_factor
-      - correction_applied
-
-    # Only merge if date is recent (avoid stale calibration)
-    condition: "properties.datetime > 2024-01-01"
+    input_file: data/calibration.json
+    sidecar_id_path: "id"  # Required for list format
+    strategy: "update"  # Overwrite existing values
+    field_mapping:
+      # Key = target field in item.properties
+      # Value = JMESPath query applied to sidecar entry
+      calibration_factor: "metadata.calibration.factor"
+      correction_applied: "metadata.calibration.applied"
+      sensor_info: "sensor.name"
+    handle_missing: "warn"
 ```
+
+**data/calibration.json (list format):**
+
+```json
+[
+  {
+    "id": "S2A_MSI...",
+    "metadata": {
+      "calibration": {
+        "factor": 1.05,
+        "applied": true
+      }
+    },
+    "sensor": {
+      "name": "MSI"
+    }
+  }
+]
+```
+
+**Result in item.properties:**
+
+```json
+{
+  "calibration_factor": 1.05,
+  "correction_applied": true,
+  "sensor_info": "MSI"
+}
+```
+
 
 ---
 
@@ -377,6 +496,7 @@ cat outputs/sentinel-2-l2a-tutorial-03/items/S2A_*.json | jq '.properties | keys
 ```
 
 **You should see progressive enrichment:**
+
 - Tutorial 01: Original properties only
 - Tutorial 02: Original + processing metadata
 - Tutorial 03: Original + extensions + sidecar data
@@ -404,13 +524,14 @@ Then use in workflow:
 
 ```yaml
 - id: enrich
-  module: EnrichModule
+  module: TransformModule
   config:
-    sidecar_source: data/quality-metrics.json
-    merge_key: item_id
-    properties_to_merge:
-      - quality_score
-      - recommended_action
+    input_file: data/quality-metrics.json
+    sidecar_id_path: "id"
+    strategy: "merge"
+    field_mapping:
+      quality_score: "quality_score"
+      recommended_action: "recommended_action"
 ```
 
 ### Combining Extensions and Enrichment
@@ -439,15 +560,16 @@ steps:
 
   # Enrich with custom analysis
   - id: enrich
-    module: EnrichModule
+    module: TransformModule
     depends_on: [extend]
     config:
-      sidecar_source: data/analysis-results.json
-      merge_key: item_id
-      properties_to_merge:
-        - ndvi
-        - ndwi
-        - classification
+      input_file: data/analysis-results.json
+      sidecar_id_path: "id"
+      strategy: "merge"
+      field_mapping:
+        ndvi: "ndvi"
+        ndwi: "ndwi"
+        classification: "classification"
 
   - id: output
     module: OutputModule
@@ -478,19 +600,24 @@ python scripts/generate_sample_data.py \
 
 ### "No matching items in sidecar"
 
-**Error**: `[enrich] 0 items matched in sidecar data`
+**Error**: `[transform] Item ID not found in sidecar data`
 
-**Cause**: `merge_key` doesn't match between items and sidecar
+**Cause**: Item IDs don't match between items and sidecar file, or `sidecar_id_path` is incorrect
 
-**Solution**: Verify keys match:
+**Solution**: Verify item IDs match and sidecar format is correct:
 
 ```bash
 # Check item IDs
 cat samples/sentinel-2-l2a-api/data/items.json | jq '.[] | .id' | head -3
 
-# Check sidecar keys
+# Check sidecar keys (dict format)
 cat samples/sentinel-2-l2a-api/sidecar-data/cloud-cover.json | jq 'keys' | head -3
+
+# Check sidecar IDs (list format)
+cat samples/sentinel-2-l2a-api/sidecar-data/cloud-cover.json | jq '.[].id' | head -3
 ```
+
+If using list format, ensure `sidecar_id_path` points to the correct field (default is `"id"`).
 
 ### Validation fails after extensions
 
@@ -538,3 +665,4 @@ cat samples/sentinel-2-l2a-api/sidecar-data/cloud-cover.json | jq 'keys' | head 
 - [Projection Extension](https://github.com/stac-extensions/projection)
 - [View Extension](https://github.com/stac-extensions/view)
 - [Complete Extension List](https://github.com/stac-extensions)
+

@@ -41,34 +41,27 @@ steps:
       source: samples/sentinel-2-l2a-api/data/items.json
       collection_id: sentinel-2-l2a
 
-  - id: modify
-    module: ModifyModule
+  - id: update
+    module: UpdateModule
     depends_on: [ingest]
     config:
-      operations:
-        - type: add_property
-          path: properties.processed
-          value: true
-        - type: add_property
-          path: properties.processing_date
-          value: "2024-01-26T00:00:00Z"
-        - type: add_property
-          path: properties.processing_note
-          value: "Processed via tutorial 02 workflow"
+      mode: merge
+      patch_file: samples/sentinel-2-l2a-api/patch-data/updates.json
+      create_missing_paths: true
+      auto_update_timestamp: true
 
   - id: validate
     module: ValidateModule
-    depends_on: [modify]
+    depends_on: [update]
     config:
-      strict: true
+      strict: false
 
   - id: output
     module: OutputModule
     depends_on: [validate]
     config:
-      base_dir: ./outputs
+      base_dir: ./outputs/tutorial-02
       format: json
-      collection_id: sentinel-2-l2a-tutorial-02
 ```
 
 ### Pipeline Flow
@@ -124,56 +117,53 @@ ModifyModule supports several operations for transforming items:
 Add or update a property at a specific JSON path:
 
 ```yaml
-- type: add_property
-  path: properties.custom_field
-  value: "my_value"
-
-# Works with nested paths
-- type: add_property
-  path: properties.metadata.processing.tool
-  value: "stac-manager"
-
-# Works with arrays
-- type: add_property
-  path: properties.tags
-  value: ["sentinel-2", "processed", "tutorial"]
-
-# Works with objects
-- type: add_property
-  path: properties.metadata
-  value:
-    source: "planetary_computer"
-    version: "1.0"
+updates:
+  properties:
+    custom_field: "my_value"
+    metadata:
+      processing:
+        tool: "stac-manager"
+    tags:
+      - "sentinel-2"
+      - "processed"
+      - "tutorial"
 ```
 
-#### 2. rename_property
+#### 2. removes
 
-Rename a property from one path to another:
+Remove properties from items:
 
 ```yaml
-- type: rename_property
-  from_path: properties.old_name
-  to_path: properties.new_name
+removes:
+  - properties.obsolete_field
+  - properties.temporary_data
 ```
 
-#### 3. delete_property
+#### 3. mode
 
-Remove a property:
+Control how updates are applied:
 
 ```yaml
-- type: delete_property
-  path: properties.obsolete_field
+mode: merge              # Merge updates into item (default)
+mode: replace           # Replace entire item with patch
+mode: update_only       # Only update existing fields
 ```
 
-#### 4. conditional_property
+#### 4. create_missing_paths
 
-Add property only if a condition is met:
+Automatically create nested paths:
 
 ```yaml
-- type: conditional_property
-  condition: "properties.eo:cloud_cover < 20"
-  path: properties.is_clear_sky
-  value: true
+create_missing_paths: true    # Create missing nested dicts
+create_missing_paths: false   # Fail if path doesn't exist
+```
+
+#### 5. auto_update_timestamp
+
+Automatically add an `updated` timestamp:
+
+```yaml
+auto_update_timestamp: true   # Adds properties.updated
 ```
 
 ---
@@ -185,26 +175,17 @@ Add property only if a condition is met:
 Track where and when items were processed:
 
 ```yaml
-- id: modify
-  module: ModifyModule
+- id: update
+  module: UpdateModule
   depends_on: [ingest]
   config:
-    operations:
-      - type: add_property
-        path: properties.processed_by
-        value: "stac-manager"
-
-      - type: add_property
-        path: properties.processing_date
-        value: "2024-01-26T12:00:00Z"
-
-      - type: add_property
-        path: properties.processing_version
-        value: "2.0"
-
-      - type: add_property
-        path: properties.workflow_id
-        value: "update-pipeline-v1"
+    mode: merge
+    updates:
+      properties:
+        processed_by: "stac-manager"
+        processing_date: "2024-01-26T12:00:00Z"
+        processing_version: "2.0"
+        workflow_id: "update-pipeline-v1"
 ```
 
 **Result:** Each item now has a processing trail showing what tool processed it and when.
@@ -214,28 +195,17 @@ Track where and when items were processed:
 Add flags based on data properties:
 
 ```yaml
-- id: modify
-  module: ModifyModule
+- id: update
+  module: UpdateModule
   depends_on: [ingest]
   config:
-    operations:
-      # Flag clear-sky images
-      - type: conditional_property
-        condition: "properties.eo:cloud_cover < 10"
-        path: properties.is_clear_sky
-        value: true
-
-      # Flag recent data
-      - type: conditional_property
-        condition: "properties.datetime > 2024-01-01"
-        path: properties.is_recent
-        value: true
-
-      # Flag high-quality products
-      - type: conditional_property
-        condition: "properties.quality_score > 0.8"
-        path: properties.is_high_quality
-        value: true
+    mode: merge
+    updates:
+      properties:
+        is_clear_sky: false
+        is_recent: false
+        is_high_quality: false
+    # Note: Conditional flagging requires a custom transform
 ```
 
 ### Pattern 3: Standardize Property Names
@@ -243,25 +213,15 @@ Add flags based on data properties:
 Convert collection-specific properties to standard names:
 
 ```yaml
-- id: modify
-  module: ModifyModule
+- id: update
+  module: UpdateModule
   depends_on: [ingest]
   config:
-    operations:
-      # Sentinel-2 uses "eo:cloud_cover", we want "cloud_cover"
-      - type: add_property
-        path: properties.cloud_cover
-        value: "{{ properties.eo:cloud_cover }}"
-
-      # Rename acquisition time for consistency
-      - type: rename_property
-        from_path: properties.datetime
-        to_path: properties.acquisition_date
-
-      # Add standardized quality metric
-      - type: add_property
-        path: properties.quality_tier
-        value: "standard"
+    mode: merge
+    updates:
+      properties:
+        cloud_cover: "{{ properties.eo:cloud_cover }}"
+        quality_tier: "standard"
 ```
 
 ### Pattern 4: Add Upstream Processing Info
@@ -269,18 +229,79 @@ Convert collection-specific properties to standard names:
 Track what preprocessing was applied:
 
 ```yaml
-- id: modify
-  module: ModifyModule
+- id: update
+  module: UpdateModule
   depends_on: [validate]
   config:
-    operations:
-      - type: add_property
-        path: properties.preprocessing
-        value:
+    mode: merge
+    updates:
+      properties:
+        preprocessing:
           atmospheric_correction: "applied"
           cloud_masking: "applied"
           terrain_correction: "applied"
           version: "sen2cor_2.10"
+```
+
+### Pattern 5: Using Wildcards to Update All Assets
+
+**New in v1.1.0:** Use wildcard patterns to apply updates to multiple assets at once:
+
+```yaml
+- id: update
+  module: UpdateModule
+  depends_on: [ingest]
+  config:
+    mode: merge
+    updates:
+      # Add roles to ALL assets
+      assets.*.roles: ["data"]
+      
+      # Add custom metadata to all assets
+      assets.*.custom:processed: true
+      assets.*.custom:version: "1.0.0"
+      
+      # With template variables - unique per asset
+      assets.*.alternate.s3.href: "s3://my-bucket/{collection_id}/{asset_key}/"
+```
+
+**Why use wildcards?**
+
+- Apply updates to all assets without listing each one
+- Maintain consistency across assets
+- Reduce configuration verbosity
+
+**Template Variables:**
+
+- `{item_id}` - Replaced with the item's ID
+- `{collection_id}` - Replaced with the item's collection ID
+- `{asset_key}` - Replaced with each asset's key (e.g., "B04", "visual")
+
+**Example output:**
+
+```json
+{
+  "assets": {
+    "visual": {
+      "href": "https://example.com/visual.tif",
+      "roles": ["data"],
+      "alternate": {
+        "s3": {
+          "href": "s3://my-bucket/sentinel-2-l2a/visual/"
+        }
+      }
+    },
+    "B04": {
+      "href": "https://example.com/B04.tif",
+      "roles": ["data"],
+      "alternate": {
+        "s3": {
+          "href": "s3://my-bucket/sentinel-2-l2a/B04/"
+        }
+      }
+    }
+  }
+}
 ```
 
 ---
@@ -289,7 +310,7 @@ Track what preprocessing was applied:
 
 ### Chaining Modifiers
 
-You can chain multiple ModifyModule steps:
+You can chain multiple UpdateModule steps:
 
 ```yaml
 steps:
@@ -298,29 +319,28 @@ steps:
     # ...
 
   # First pass: Add metadata
-  - id: modify_metadata
-    module: ModifyModule
+  - id: update_metadata
+    module: UpdateModule
     depends_on: [ingest]
     config:
-      operations:
-        - type: add_property
-          path: properties.processed
-          value: true
+      mode: merge
+      updates:
+        properties.processed: true
 
-  # Second pass: Add quality flags
-  - id: modify_quality
-    module: ModifyModule
-    depends_on: [modify_metadata]
+  # Second pass: Add removal list
+  - id: update_cleanup
+    module: UpdateModule
+    depends_on: [update_metadata]
     config:
-      operations:
-        - type: conditional_property
-          condition: "properties.eo:cloud_cover < 20"
-          path: properties.acceptable_quality
-          value: true
+      mode: merge
+      updates:
+        properties.acceptable_quality: true
+      removes:
+        - properties.temporary_field
 
   - id: validate
     module: ValidateModule
-    depends_on: [modify_quality]
+    depends_on: [update_cleanup]
     # ...
 ```
 
@@ -443,13 +463,15 @@ cat outputs/sentinel-2-l2a-tutorial-02/items/S2A_*.json | jq '.properties | keys
 
 ---
 
-## Reference: All Operation Types
+## Reference: UpdateModule Configuration
 
-| Operation | Purpose | Example |
+| Option | Type | Purpose |
 | --- | --- | --- |
-| `add_property` | Add or update a property | `path: properties.field`, `value: "value"` |
-| `rename_property` | Rename a property | `from_path: old`, `to_path: new` |
-| `delete_property` | Remove a property | `path: properties.field` |
-| `conditional_property` | Add if condition met | `condition: "...", path: ..., value: ...` |
+| `updates` | Dict | Field path → value mapping for updates |
+| `removes` | List | List of field paths to remove |
+| `mode` | String | `merge` (default), `replace`, or `update_only` |
+| `create_missing_paths` | Bool | Auto-create nested dicts (default: true) |
+| `auto_update_timestamp` | Bool | Add `properties.updated` timestamp (default: true) |
+| `patch_file` | String | Optional JSON file with item-specific patches |
 
-See [ModifyModule Reference](../spec/stac-manager-v1.0.0/03-module-reference.md#modifymodule) for complete documentation.
+See [UpdateModule Reference](../spec/stac-manager-v1.0.0/03-module-reference.md#updatemodule) for complete documentation.

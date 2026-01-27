@@ -20,11 +20,10 @@ A comprehensive guide to STAC Manager's design, components, and patterns.
 
 ### What is STAC Manager?
 
-STAC Manager is a **production-grade orchestration framework** for processing Spatial-Temporal Asset Catalog (STAC) data. It enables users to:
+STAC Manager uses an **orchestration framework** for processing Spatial-Temporal Asset Catalog (STAC) data. It enables users to:
 
 - **Fetch** STAC items from remote APIs or local files
-- **Transform** items through configurable pipeline stages
-- **Validate** data quality at each step
+- **Modify** items through configurable pipeline stages
 - **Output** results in multiple formats (JSON, Parquet, GeoPackage)
 
 ### Design Philosophy
@@ -43,9 +42,9 @@ STAC Manager follows three core principles:
 
 ### Pattern Overview
 
-STAC Manager implements the **Pipes and Filters** architectural pattern, a Unix-inspired model for composable data processing:
+STAC Manager implements the **Pipes and Filters** design pattern, by breaking down a typical data processing pipeline for STAC metadata management into composable steps:
 
-```
+```text
 Input Stream → Filter → Pipe → Filter → Pipe → Filter → Output
                   ↓              ↓              ↓
               Module 1      Module 2      Module 3
@@ -76,7 +75,7 @@ Fetching and processing satellite imagery:
 
 | Benefit | Why It Matters |
 | --- | --- |
-| **Scalability** | Process millions of items without loading all into memory |
+| **Scalability** | Stream STAC items through the pipeline without loading all into memory |
 | **Modularity** | Mix and match modules for different workflows |
 | **Testability** | Each module is independently testable |
 | **Resilience** | One filter's failure doesn't crash the entire pipeline |
@@ -109,6 +108,7 @@ datetime: 2024-01-01/2024-12-31
 **Output**: Stream of STAC item dictionaries
 
 **When to use:**
+
 - Starting any workflow
 - Fetching fresh data from catalogs
 - Testing with pre-generated samples
@@ -132,6 +132,7 @@ config:
 **Output**: Validated items (filtering out invalid ones if `strict: false`)
 
 **When to use:**
+
 - Ensure data quality before output
 - Catch issues early in the pipeline
 - Debug data source problems
@@ -172,65 +173,151 @@ config:
 **Output**: Modified items
 
 **When to use:**
+
 - Add processing metadata
 - Standardize property names
 - Filter by computed conditions
 
 ---
 
-### ExtensionModule (Filter)
+### ExtensionModule (Modifier)
 
-**Purpose**: Add STAC extensions to items
+**Purpose**: Add STAC extensions to items using schema-driven scaffolding
 
 **Configuration:**
 
 ```yaml
 module: ExtensionModule
 config:
-  extensions:
-    - name: eo
-      properties:
-        bands:
-          - name: "B2"
-            common_name: "blue"
-            center_wavelength: 0.490
+  schema_uri: "https://stac-extensions.github.io/alternate-assets/v1.2.0/schema.json"
+  defaults:
+    # Use dot-notation for specific properties
+    properties.custom:field: "value"
+    
+    # Use wildcards for all assets (v1.1.0+)
+    assets.*.roles: ["data"]
+    assets.*.alternate.s3.href: "s3://bucket/{collection_id}/{asset_key}/"
+    assets.*.alternate:name: "HTTPS"
+  required_fields_only: true
+```
 
-    - name: projection
-      properties:
-        epsg: 32633
+**Wildcard Features (v1.1.0+):**
 
-    - name: view
-      properties:
-        incidence_angle: 10.5
+- **Wildcard Syntax**: `assets.*` applies to all assets
+- **Template Variables**:
+  - `{item_id}` - Item's unique ID
+  - `{collection_id}` - Collection ID
+  - `{asset_key}` - Each asset's key (e.g., "visual", "B04")
+- **Dot-notation**: Supports nested property paths like `assets.visual.alternate.s3.href`
+
+**Example - Before/After:**
+
+Input item with 3 assets:
+
+```json
+{
+  "assets": {
+    "visual": {"href": "..."},
+    "B04": {"href": "..."},
+    "B08": {"href": "..."}
+  }
+}
+```
+
+After applying `assets.*.alternate.s3.href: "s3://bucket/{asset_key}/"`:
+
+```json
+{
+  "assets": {
+    "visual": {
+      "href": "...",
+      "alternate": {"s3": {"href": "s3://bucket/visual/"}}
+    },
+    "B04": {
+      "href": "...",
+      "alternate": {"s3": {"href": "s3://bucket/B04/"}}
+    },
+    "B08": {
+      "href": "...",
+      "alternate": {"s3": {"href": "s3://bucket/B08/"}}
+    }
+  }
+}
 ```
 
 **Output**: Extended items with standardized properties
 
 **When to use:**
+
 - Add domain-specific metadata
 - Standardize item structure across collections
+- Apply consistent metadata to all assets
 - Enable downstream analysis tools
 
 ---
 
-### EnrichModule (Filter)
+### UpdateModule (Modifier)
+
+**Purpose**: Modify existing STAC item properties
+
+**Configuration:**
+
+```yaml
+module: UpdateModule
+config:
+  mode: merge  # or 'replace', 'update_only'
+  updates:
+    # Simple property updates
+    properties.processed: true
+    properties.version: "1.0.0"
+    
+    # Wildcard updates to all assets (v1.1.0+)
+    assets.*.roles: ["data"]
+    assets.*.custom:metadata: "value"
+    
+    # Template variables
+    assets.*.alternate.s3.href: "s3://my-bucket/{collection_id}/{asset_key}/"
+  removes:
+    - properties.temporary_field
+  create_missing_paths: true
+  auto_update_timestamp: true
+```
+
+**Wildcard Features (v1.1.0+):**
+
+Same wildcard and template variable support as ExtensionModule.
+
+**When to use:**
+
+- Add or modify item properties
+- Standardize metadata across items
+- Apply consistent updates to all assets
+- Remove temporary or unwanted fields
+
+---
+
+### TransformModule (Filter)
 
 **Purpose**: Merge external sidecar data with items
 
 **Configuration:**
 
 ```yaml
-module: EnrichModule
+module: TransformModule
 config:
-  sidecar_source: data/metrics.json  # or .csv
-  merge_key: item_id
-  properties_to_merge:
-    - cloud_cover
-    - quality_score
-    - processing_level
+  input_file: data/metrics.json
+  strategy: "merge"  # or 'update'
+  field_mapping:
+    # Key: target field in item.properties
+    # Value: JMESPath query on sidecar entry
+    cloud_cover: "cloud_cover"
+    quality_score: "quality_score"
+  handle_missing: "ignore"  # or 'warn', 'error'
+  # sidecar_id_path: "id"  # Only needed for list format
 ```
 
-**Sidecar Format (JSON):**
+**Sidecar Format (JSON Dict - recommended):**
+
 ```json
 {
   "S2A_MSI..._001": {
@@ -240,15 +327,28 @@ config:
 }
 ```
 
-**Sidecar Format (CSV):**
+**Sidecar Format (JSON List - requires sidecar_id_path):**
+
+```json
+[
+  {
+    "id": "S2A_MSI..._001",
+    "cloud_cover": 15.3,
+    "quality_score": 0.95
+  }
+]
 ```
-item_id,cloud_cover,quality_score
-S2A_MSI..._001,15.3,0.95
-```
+
+**How it works:**
+
+1. Looks up item ID in sidecar data
+2. Applies JMESPath queries from `field_mapping` values to sidecar entry
+3. Merges results into `item.properties` using `field_mapping` keys
 
 **Output**: Enriched items with merged data
 
 **When to use:**
+
 - Combine STAC items with external analysis
 - Add quality metrics from separate systems
 - Merge multi-source datasets
@@ -272,7 +372,7 @@ config:
 
 **Output Structures:**
 
-```
+```text
 outputs/
 ├── collection.json        # Collection metadata
 ├── catalog.json          # STAC Catalog
@@ -283,6 +383,7 @@ outputs/
 ```
 
 **When to use:**
+
 - Final stage of any pipeline
 - Creating shareable datasets
 - Long-term storage
@@ -339,7 +440,7 @@ steps:
     config: {...}
 
   - id: enrich
-    module: EnrichModule
+    module: TransformModule
     depends_on: [extend]
     config: {...}
 
@@ -402,7 +503,7 @@ steps:
 
 Every STAC item progresses through the pipeline:
 
-```
+```text
 ┌─────────┐   ┌──────────┐   ┌──────────┐   ┌────────┐   ┌────────┐
 │ Created │→ │ Modified │→ │ Extended │→ │Enriched│→ │Validated
 └─────────┘   └──────────┘   └──────────┘   └────────┘   └────────┘
@@ -417,6 +518,7 @@ Every STAC item progresses through the pipeline:
 ### Example: Sentinel-2 Processing
 
 **Step 1: Ingest**
+
 ```json
 {
   "id": "S2A_MSIL2A_20240101T000000_N0509_R002_T33UUP_20240101T000000",
@@ -429,6 +531,7 @@ Every STAC item progresses through the pipeline:
 ```
 
 **Step 2: Modify**
+
 ```json
 {
   // ... same as above, plus:
@@ -440,6 +543,7 @@ Every STAC item progresses through the pipeline:
 ```
 
 **Step 3: Extend (Add EO Extension)**
+
 ```json
 {
   // ... same as above, plus:
@@ -455,6 +559,7 @@ Every STAC item progresses through the pipeline:
 ```
 
 **Step 4: Enrich (Merge Quality Data)**
+
 ```json
 {
   // ... same as above, plus:
@@ -567,6 +672,7 @@ async for item in ingest_module.process():
 ```
 
 **Benefits:**
+
 - Handle millions of items with minimal RAM
 - Process can start before all data is fetched
 - Early error detection stops unnecessary processing
@@ -626,10 +732,12 @@ Process items in batches:
 
 ```yaml
 - id: enrich
-  module: EnrichModule
+  module: TransformModule
   config:
     batch_size: 100  # Process 100 items at a time
-    sidecar_source: data/metrics.json
+    input_file: data/metrics.json
+    sidecar_id_path: "id"
+    strategy: "merge"
 ```
 
 **2. Parallel Execution**
@@ -650,7 +758,7 @@ steps:
 
   # Path 2: Process for enrichment (runs in parallel)
   - id: enrich
-    module: EnrichModule
+    module: TransformModule
     depends_on: [ingest]
     config: {...}
 
@@ -765,3 +873,4 @@ steps:
 - [Module Reference](../../spec/stac-manager-v1.0.0/03-module-reference.md)
 - [Configuration Guide](../../spec/stac-manager-v1.0.0/02-configuration-schema.md)
 - [Python API](../../spec/stac-manager-v1.0.0/04-python-library-api.md)
+
