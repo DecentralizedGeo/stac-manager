@@ -49,8 +49,12 @@ class TransformConfig(BaseModel):
 class IngestConfig(BaseModel):
     """Configuration for IngestModule."""
     mode: Literal["file", "api"] = Field(description="Ingestion mode")
-    source: str = Field(description="File path (file mode) or API catalog URL (api mode)")
-    format: Optional[Literal["json", "parquet"]] = Field(default="json", description="File format (file mode only)")
+    source: str = Field(description="File/directory path (file mode) or API catalog URL (api mode)")
+    source_type: Optional[Literal["auto", "file", "items_directory", "collection"]] = Field(
+        default="auto",
+        description="Source type: 'auto' (auto-detect), 'file' (single JSON/Parquet), 'items_directory' (directory of items), 'collection' (collection root or collection.json)"
+    )
+    format: Optional[Literal["json", "parquet"]] = Field(default=None, description="File format override (auto-detected if not specified)")
     collection_id: Optional[str] = Field(default=None, description="Single collection to fetch (API mode). If not set, uses context.data['collection_id']")
     bbox: Optional[List[float]] = Field(default=None, description="Bounding box filter")
     datetime: Optional[str] = Field(default=None, description="Datetime filter")
