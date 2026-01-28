@@ -36,14 +36,15 @@ class ExtensionConfig(BaseModel):
 
 class TransformConfig(BaseModel):
     """Configuration for TransformModule."""
-    input_file: Optional[str] = None
-    strategy: Literal['merge', 'update'] = 'merge'
-    sidecar_id_path: str = "id"
-    data_path: Optional[str] = None
-    field_mapping: Optional[Dict[str, str]] = None
+    input_file: str = Field(description="Path to input data file (CSV/JSON/Parquet)")
+    input_join_key: str = Field(default="id", description="Field in input file to join on")
+    
+    data_path: Optional[str] = Field(default=None, description="JMESPath to records list (JSON only)")
+    
+    field_mapping: Dict[str, str] = Field(description="Map target_field -> source_field")
+    
     handle_missing: Literal['ignore', 'warn', 'error'] = 'ignore'
-    schema_file: Optional[str] = None
-    schema_mapping: Optional[Dict[str, Any]] = Field(alias='schema', default=None)
+    strategy: Literal['merge', 'update'] = 'merge'
 
 
 class IngestConfig(BaseModel):

@@ -5,17 +5,21 @@ import copy
 from stac_manager.exceptions import DataProcessingError
 
 
-def set_nested_field(item: dict, path: str, value: Any) -> None:
+def set_nested_field(item: dict, path: str | list[str] | tuple[str, ...], value: Any) -> None:
     """
-    Set nested field using dot notation.
+    Set nested field using dot notation or list of keys.
     Creates intermediate dicts as needed.
     
     Args:
         item: STAC item dict (modified in-place)
-        path: Dot-separated path (e.g., "properties.eo:cloud_cover")
+        path: Path as dot-separated string or list/tuple of keys
         value: Value to set
     """
-    keys = path.split('.')
+    if isinstance(path, str):
+        keys = path.split('.')
+    else:
+        keys = list(path)
+        
     current = item
     
     for key in keys[:-1]:
@@ -26,19 +30,23 @@ def set_nested_field(item: dict, path: str, value: Any) -> None:
     current[keys[-1]] = value
 
 
-def get_nested_field(item: dict, path: str, default: Any = None) -> Any:
+def get_nested_field(item: dict, path: str | list[str] | tuple[str, ...], default: Any = None) -> Any:
     """
-    Get nested field value using dot notation.
+    Get nested field value using dot notation or list of keys.
     
     Args:
         item: STAC item dict
-        path: Dot-separated path
+        path: Path as dot-separated string or list/tuple of keys
         default: Default value if path doesn't exist
         
     Returns:
         Field value or default
     """
-    keys = path.split('.')
+    if isinstance(path, str):
+        keys = path.split('.')
+    else:
+        keys = list(path)
+        
     current = item
     
     for key in keys:
@@ -120,7 +128,7 @@ def expand_wildcard_paths(
         context: Optional context for template variables (item_id, collection_id)
         
     Returns:
-        New dict with expanded paths (wildcards replaced with actual keys)
+        New dict with expanded paths as tuples of keys
         
     Example:
         template_dict = {
@@ -131,9 +139,9 @@ def expand_wildcard_paths(
         
         Returns:
         {
-            "assets.visual.alternate.s3.href": "s3://bucket/visual/",
-            "assets.B04.alternate.s3.href": "s3://bucket/B04/",
-            "assets.visual.title": "Visual Image"
+            ("assets", "visual", "alternate", "s3", "href"): "s3://bucket/visual/",
+            ("assets", "B04", "alternate", "s3", "href"): "s3://bucket/B04/",
+            ("assets", "visual", "title"): "Visual Image"
         }
     """
     if context is None:
@@ -151,41 +159,36 @@ def expand_wildcard_paths(
         if "*" not in path:
             # No wildcard - apply template variables and keep as-is
             expanded_value = _apply_template_variables(value, context)
-            expanded[path] = expanded_value
+            # Use tuple of keys even for simple paths to remain consistent
+            expanded[tuple(path.split('.'))] = expanded_value
             continue
         
         # Parse path to find wildcard position
         parts = path.split(".")
         wildcard_idx = parts.index("*")
         
-        # Get the parent path (before wildcard)
-        parent_path = ".".join(parts[:wildcard_idx]) if wildcard_idx > 0 else ""
+        # Get the parent path parts (before wildcard)
+        parent_parts = parts[:wildcard_idx]
         
-        # Get parent object from target item
-        parent_obj = get_nested_field(target_item, parent_path, {}) if parent_path else target_item
+        # Get parent object from target item using the parts list
+        parent_obj = get_nested_field(target_item, parent_parts, {}) if parent_parts else target_item
         
         if not isinstance(parent_obj, dict):
             continue
         
-        # Expand wildcard to all keys in parent object
-        suffix = ".".join(parts[wildcard_idx + 1:]) if wildcard_idx < len(parts) - 1 else ""
+        # Get the suffix parts (after wildcard)
+        suffix_parts = parts[wildcard_idx + 1:]
         
         for key in parent_obj.keys():
-            # Build expanded path
-            if parent_path:
-                expanded_path = f"{parent_path}.{key}"
-            else:
-                expanded_path = key
+            # Build expanded path as a tuple of keys
+            expanded_path_parts = parent_parts + [key] + suffix_parts
             
-            if suffix:
-                expanded_path = f"{expanded_path}.{suffix}"
-            
-            # Apply template variables with asset_key context (create new dict to avoid mutation)
+            # Apply template variables with asset_key context
             asset_context = dict(context) if context else {}
             asset_context["asset_key"] = key
             expanded_value = _apply_template_variables(value, asset_context)
             
-            expanded[expanded_path] = expanded_value
+            expanded[tuple(expanded_path_parts)] = expanded_value
     
     return expanded
 

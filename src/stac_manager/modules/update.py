@@ -29,11 +29,15 @@ def dot_notation_to_nested(dot_dict: dict) -> dict:
     return result
 
 
-def set_field_with_path_creation(item: dict, path: str, value: Any, create_paths: bool) -> None:
+def set_field_with_path_creation(item: dict, path: str | list[str] | tuple[str, ...], value: Any, create_paths: bool) -> None:
     """
     Set nested field with optional path creation and error handling.
     """
-    keys = path.split('.')
+    if isinstance(path, str):
+        keys = path.split('.')
+    else:
+        keys = list(path)
+        
     current = item
     
     for i, key in enumerate(keys[:-1]):
