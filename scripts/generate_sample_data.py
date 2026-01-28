@@ -1,7 +1,7 @@
 """Generate sample STAC data for tutorials and documentation.
 
 This script fetches real STAC items from public catalogs, converts them to
-multiple formats (JSON, Parquet), and generates sidecar data for tutorials.
+multiple formats (JSON, Parquet), and generates input data for tutorials.
 """
 import csv
 import json
@@ -113,8 +113,8 @@ def extract_collection_metadata(catalog_url: str, collection_id: str) -> Dict:
     return filtered
 
 
-def generate_sidecar_data(items: List[Dict]) -> Dict[str, Dict]:
-    """Generate sidecar data from STAC items.
+def generate_input_data(items: List[Dict]) -> Dict[str, Dict]:
+    """Generate input data from STAC items.
     
     Extracts cloud cover and snow cover properties for use in tutorials.
     
@@ -124,33 +124,33 @@ def generate_sidecar_data(items: List[Dict]) -> Dict[str, Dict]:
     Returns:
         Dictionary mapping item_id to properties
     """
-    sidecar = {}
+    input_data = {}
     
     for item in items:
         item_id = item["id"]
         props = item.get("properties", {})
         
-        sidecar[item_id] = {
+        input_data[item_id] = {
             "cloud_cover": props.get("eo:cloud_cover", 0.0),
             "snow_cover": props.get("s2:snow_ice_percentage", 0.0)
         }
     
-    logger.info(f"Generated sidecar data for {len(sidecar)} items")
-    return sidecar
+    logger.info(f"Generated input data for {len(input_data)} items")
+    return input_data
 
 
-def save_sidecar_formats(sidecar_data: Dict[str, Dict], json_path: Path, csv_path: Path) -> None:
-    """Save sidecar data in both JSON and CSV formats.
+def save_input_formats(input_data_dict: Dict[str, Dict], json_path: Path, csv_path: Path) -> None:
+    """Save input data in both JSON and CSV formats.
     
     Args:
-        sidecar_data: Dictionary of item_id -> properties
+        input_data_dict: Dictionary of item_id -> properties
         json_path: Path to output JSON file
         csv_path: Path to output CSV file
     """
     # Save JSON (dict format)
     json_path.parent.mkdir(parents=True, exist_ok=True)
     with open(json_path, 'w') as f:
-        json.dump(sidecar_data, f, indent=2)
+        json.dump(input_data_dict, f, indent=2)
     
     # Save CSV (flat format)
     csv_path.parent.mkdir(parents=True, exist_ok=True)
@@ -158,14 +158,14 @@ def save_sidecar_formats(sidecar_data: Dict[str, Dict], json_path: Path, csv_pat
         writer = csv.DictWriter(f, fieldnames=["item_id", "cloud_cover", "snow_cover"])
         writer.writeheader()
         
-        for item_id, props in sidecar_data.items():
+        for item_id, props in input_data_dict.items():
             writer.writerow({
                 "item_id": item_id,
                 "cloud_cover": props["cloud_cover"],
                 "snow_cover": props["snow_cover"]
             })
     
-    logger.info(f"Saved sidecar data to {json_path} and {csv_path}")
+    logger.info(f"Saved input data to {json_path} and {csv_path}")
 
 
 @click.command(name='generate-sample-data')
@@ -217,7 +217,7 @@ def cli(catalog_url: str, collection: str, items: int, output_dir: str, bbox: Op
     output_root = Path(output_dir)
     collection_dir = output_root / f"{collection}-api"
     data_dir = collection_dir / "data"
-    sidecar_dir = collection_dir / "sidecar-data"
+    input_data_dir = collection_dir / "input-data"
     
     # Parse bbox if provided
     bbox_list = None
@@ -232,7 +232,7 @@ def cli(catalog_url: str, collection: str, items: int, output_dir: str, bbox: Op
     
     try:
         # Fetch items from API
-        click.echo(f"\n📥 Fetching items...")
+        click.echo(f"\\n📥 Fetching items...")
         items_data = fetch_stac_items(
             catalog_url=catalog_url,
             collection_id=collection,
@@ -243,7 +243,7 @@ def cli(catalog_url: str, collection: str, items: int, output_dir: str, bbox: Op
         click.secho(f"✓ Fetched {len(items_data)} items", fg="green")
         
         # Save as JSON
-        click.echo(f"\n💾 Saving formats...")
+        click.echo(f"\\n💾 Saving formats...")
         json_path = data_dir / "items.json"
         save_items_as_json(items_data, json_path)
         click.secho(f"✓ Saved JSON: {json_path}", fg="green")
@@ -254,7 +254,7 @@ def cli(catalog_url: str, collection: str, items: int, output_dir: str, bbox: Op
         click.secho(f"✓ Saved Parquet: {parquet_path}", fg="green")
         
         # Extract collection metadata
-        click.echo(f"\n📋 Extracting collection metadata...")
+        click.echo(f"\\n📋 Extracting collection metadata...")
         collection_metadata = extract_collection_metadata(catalog_url, collection)
         collection_path = data_dir / "collection.json"
         collection_path.parent.mkdir(parents=True, exist_ok=True)
@@ -262,28 +262,28 @@ def cli(catalog_url: str, collection: str, items: int, output_dir: str, bbox: Op
             json.dump(collection_metadata, f, indent=2)
         click.secho(f"✓ Saved metadata: {collection_path}", fg="green")
         
-        # Generate sidecar data
-        click.echo(f"\n📊 Generating sidecar data...")
-        sidecar_data = generate_sidecar_data(items_data)
-        save_sidecar_formats(
-            sidecar_data,
-            sidecar_dir / "cloud-cover.json",
-            sidecar_dir / "cloud-cover.csv"
+        # Generate input data
+        click.echo(f"\\n📊 Generating input data...")
+        input_data = generate_input_data(items_data)
+        save_input_formats(
+            input_data,
+            input_data_dir / "cloud-cover.json",
+            input_data_dir / "cloud-cover.csv"
         )
-        click.secho(f"✓ Saved sidecar data to {sidecar_dir}", fg="green")
+        click.secho(f"✓ Saved input data to {input_data_dir}", fg="green")
         
-        click.secho(r"\n✅ Sample data generated successfully!", fg="green")
-        click.echo(r"\n📍 Location: {collection_dir}")
+        click.secho(r"\\n✅ Sample data generated successfully!", fg="green")
+        click.echo(r"\\n📍 Location: {collection_dir}")
         click.echo(r"   ├── data/")
         click.echo(r"   │   ├── items.json")
         click.echo(r"   │   ├── items.parquet")
         click.echo(r"   │   └── collection.json")
-        click.echo(r"   └── sidecar-data/")
+        click.echo(r"   └── input-data/")
         click.echo(r"       ├── cloud-cover.json")
         click.echo(r"       └── cloud-cover.csv")
         
     except Exception as e:
-        click.secho(f"\n❌ Error: {e}", fg="red")
+        click.secho(f"\\n❌ Error: {e}", fg="red")
         logger.exception("Sample data generation failed")
         raise click.Exit(1)
 
