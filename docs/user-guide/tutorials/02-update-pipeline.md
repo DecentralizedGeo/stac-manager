@@ -448,7 +448,7 @@ cat outputs/sentinel-2-l2a-tutorial-02/items/S2A_*.json | jq '.properties | keys
 
 ## Next Steps
 
-- 🔧 **[Tutorial 03: Extension Pipeline](03-extension-pipeline.md)** - Add STAC extensions and enrich with sidecar data
+- 🔧 **[Tutorial 03: Extension Pipeline](03-extension-pipeline.md)** - Add STAC extensions and enrich with input data
 - 📚 **[Concepts Guide](../concepts.md)** - Deep dive into ModifyModule patterns
 - 💡 **[Tutorial 01](01-basic-pipeline.md)** - Review API-based ingestion basics
 

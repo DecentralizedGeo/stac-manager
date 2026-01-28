@@ -257,7 +257,7 @@ Same wildcard and template variable support as ExtensionModule.
 
 ### TransformModule (Filter)
 
-**Purpose**: Merge external sidecar data with items
+**Purpose**: Merge external input data with items
 
 **Configuration:**
 
@@ -268,14 +268,14 @@ config:
   strategy: "merge"  # or 'update'
   field_mapping:
     # Key: target field in item.properties
-    # Value: JMESPath query on sidecar entry
+    # Value: JMESPath query on input entry
     cloud_cover: "cloud_cover"
     quality_score: "quality_score"
   handle_missing: "ignore"  # or 'warn', 'error'
-  # sidecar_id_path: "id"  # Only needed for list format
+  # input_join_key: "id"  # Only needed for list format
 ```
 
-**Sidecar Format (JSON Dict - recommended):**
+**Input Format (JSON Dict - recommended):**
 
 ```json
 {
@@ -286,7 +286,7 @@ config:
 }
 ```
 
-**Sidecar Format (JSON List - requires sidecar_id_path):**
+**Input Format (JSON List - requires input_join_key):**
 
 ```json
 [
@@ -300,8 +300,8 @@ config:
 
 **How it works:**
 
-1. Looks up item ID in sidecar data
-2. Applies JMESPath queries from `field_mapping` values to sidecar entry
+1. Looks up item ID in input data
+2. Applies JMESPath queries from `field_mapping` values to input entry
 3. Merges results into `item.properties` using `field_mapping` keys
 
 **Output**: Enriched items with merged data
@@ -690,7 +690,7 @@ Process items in batches:
   config:
     batch_size: 100  # Process 100 items at a time
     input_file: data/metrics.json
-    sidecar_id_path: "id"
+    input_join_key: "id"
     strategy: "merge"
 ```
 

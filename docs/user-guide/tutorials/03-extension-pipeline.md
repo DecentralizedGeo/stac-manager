@@ -1,4 +1,4 @@
-# Tutorial 03: Extension Pipeline - Adding STAC Extensions and Enriching with Sidecar Data
+# Tutorial 03: Extension Pipeline - Adding STAC Extensions and Enriching with Input Data
 
 Learn how to enrich STAC items with standardized extensions and external data sources.
 
@@ -11,7 +11,7 @@ This tutorial builds on [Tutorial 02](02-update-pipeline.md) by introducing **ST
 **What you'll learn:**
 
 - How to add STAC extensions to items (EO, Projection, Raster)
-- How to merge sidecar data (external CSV/JSON) with items
+- How to merge input data (external CSV/JSON) with items
 - Real-world data enrichment patterns
 - Complete end-to-end pipeline design
 
@@ -23,7 +23,7 @@ This tutorial builds on [Tutorial 02](02-update-pipeline.md) by introducing **ST
 
 - STAC Manager installed ([Installation Guide](../installation.md))
 - Completed [Tutorial 02: Update Pipeline](02-update-pipeline.md)
-- Sample data and sidecar data available
+- Sample data and input data available
 
 ---
 
@@ -67,8 +67,8 @@ steps:
     module: TransformModule
     depends_on: [extend]
     config:
-      input_file: samples/sentinel-2-l2a-api/sidecar-data/cloud-cover.json
-      sidecar_id_path: "id"
+      input_file: samples/sentinel-2-l2a-api/input-data/cloud-cover.json
+      input_join_key: "id"
       strategy: "merge"
       field_mapping:
         cloud_cover: "cloud_cover"
@@ -100,7 +100,7 @@ IngestModule (Local File)
         ↓
    20 Extended Items
         ↓
-   TransformModule (Merge with Sidecar Data)
+   TransformModule (Merge with Input Data)
         ↓
    20 Enriched Items
         ↓
@@ -128,8 +128,8 @@ Starting workflow: extension-pipeline
 [ingest] Loaded 20 items from file
 [extend] Adding extensions: eo, projection, raster
 [extend] Added extensions to 20 items
-[enrich] Loading sidecar data from cloud-cover.json
-[enrich] Merged sidecar data for 20 items
+[enrich] Loading input data from cloud-cover.json
+[enrich] Merged input data for 20 items
 [validate] Validated 20 items (0 errors)
 [output] Wrote 20 items to ./outputs/sentinel-2-l2a-tutorial-03
 ✓ Workflow completed successfully
@@ -245,9 +245,9 @@ This approach is much simpler than the old method of manually adding extension p
 
 ## Understanding Data Enrichment
 
-### What is Sidecar Data?
+### What is Input Data?
 
-"Sidecar data" is external data (CSV, JSON) that supplements main STAC items. Examples:
+"Input data" is external data (CSV, JSON) that supplements main STAC items. Examples:
 
 **cloud-cover.json (Dict format - keys are item IDs):**
 
@@ -285,39 +285,39 @@ This approach is much simpler than the old method of manually adding extension p
 
 ### TransformModule in Detail
 
-The TransformModule merges sidecar data with items:
+The TransformModule merges input data with items:
 
 ```yaml
 - id: enrich
   module: TransformModule
   depends_on: [extend]
   config:
-    # Source of sidecar data (JSON file)
-    input_file: samples/sentinel-2-l2a-api/sidecar-data/cloud-cover.json
+    # Source of input data (JSON file)
+    input_file: samples/sentinel-2-l2a-api/input-data/cloud-cover.json
 
     # How to merge: 'merge' (keep existing) or 'update' (overwrite)
     strategy: "merge"
 
-    # Optional: Map sidecar fields to item properties
+    # Optional: Map input fields to item properties
     # Key = target field name in item properties
-    # Value = JMESPath query applied to sidecar entry
+    # Value = JMESPath query applied to input entry
     field_mapping:
-      cloud_cover: "cloud_cover"  # item.properties.cloud_cover ← sidecar_entry.cloud_cover
-      snow_cover: "snow_cover"    # item.properties.snow_cover ← sidecar_entry.snow_cover
+      cloud_cover: "cloud_cover"  # item.properties.cloud_cover ← input_entry.cloud_cover
+      snow_cover: "snow_cover"    # item.properties.snow_cover ← input_entry.snow_cover
 
-    # Optional: How to handle missing sidecar data
+    # Optional: How to handle missing input data
     handle_missing: "ignore"  # or 'warn', 'error'
 ```
 
 **How field_mapping works:**
 
-For dict format sidecar data (keys are item IDs), TransformModule:
+For dict format input data (keys are item IDs), TransformModule:
 
-1. Looks up item ID in sidecar data
-2. Applies JMESPath queries to the sidecar entry
+1. Looks up item ID in input data
+2. Applies JMESPath queries to the input entry
 3. Merges results into `item.properties` using the mapping keys
 
-**Note**: `sidecar_id_path` is only needed for list format sidecar data. Dict format automatically uses keys as item IDs.
+**Note**: `input_join_key` is only needed for list format input data or if the join key in the input file is different from the item ID. Dict format automatically uses keys as item IDs.
 
 After enrichment, each item includes the merged properties:
 
@@ -326,8 +326,8 @@ After enrichment, each item includes the merged properties:
   "id": "S2A_MSIL2A_20240101T000000_001",
   "properties": {
     "datetime": "2024-01-01T00:00:00Z",
-    "cloud_cover": 15.3,      // ← From sidecar
-    "snow_cover": 2.1,         // ← From sidecar
+    "cloud_cover": 15.3,      // ← From input data
+    "snow_cover": 2.1,         // ← From input data
     // ... other properties
   }
 }
@@ -352,7 +352,7 @@ steps:
     depends_on: [ingest]
     config:
       input_file: data/quality-metrics.json
-      sidecar_id_path: "id"
+      input_join_key: "id"
       strategy: "merge"
       field_mapping:
         quality_score: "quality_score"
@@ -384,7 +384,7 @@ steps:
 }
 ```
 
-### Pattern 2: Multiple Sidecar Sources
+### Pattern 2: Multiple Input Sources
 
 Chain enrichment from multiple sources:
 
@@ -400,7 +400,7 @@ steps:
     depends_on: [ingest]
     config:
       input_file: data/cloud-cover.json
-      sidecar_id_path: "id"
+      input_join_key: "id"
       strategy: "merge"
       field_mapping:
         eo:cloud_cover: "eo:cloud_cover"
@@ -412,7 +412,7 @@ steps:
     depends_on: [enrich_clouds]
     config:
       input_file: data/processing-metadata.json
-      sidecar_id_path: "id"
+      input_join_key: "id"
       strategy: "merge"
       field_mapping:
         processor_version: "processor_version"
@@ -426,7 +426,7 @@ steps:
 
 ### Pattern 3: Using JMESPath in field_mapping
 
-Extract nested fields from sidecar data using JMESPath queries:
+Extract nested fields from input data using JMESPath queries:
 
 ```yaml
 - id: enrich
@@ -434,11 +434,11 @@ Extract nested fields from sidecar data using JMESPath queries:
   depends_on: [ingest]
   config:
     input_file: data/calibration.json
-    sidecar_id_path: "id"  # Required for list format
+    input_join_key: "id"  # Required for list format
     strategy: "update"  # Overwrite existing values
     field_mapping:
       # Key = target field in item.properties
-      # Value = JMESPath query applied to sidecar entry
+      # Value = JMESPath query applied to input entry
       calibration_factor: "metadata.calibration.factor"
       correction_applied: "metadata.calibration.applied"
       sensor_info: "sensor.name"
@@ -499,22 +499,22 @@ cat outputs/sentinel-2-l2a-tutorial-03/items/S2A_*.json | jq '.properties | keys
 
 - Tutorial 01: Original properties only
 - Tutorial 02: Original + processing metadata
-- Tutorial 03: Original + extensions + sidecar data
+- Tutorial 03: Original + extensions + input data
 
 ---
 
 ## Advanced Patterns
 
-### Custom Sidecar Generation
+### Custom Input Generation
 
-Generate sidecar data from external sources:
+Generate input data from external sources:
 
 ```bash
 # Download external quality metrics
 python scripts/fetch_quality_metrics.py \
   --output data/quality-metrics.json
 
-# Generate sidecar data from analysis
+# Generate input data from analysis
 python scripts/analyze_cloud_cover.py \
   --input data/items.json \
   --output data/cloud-analysis.json
@@ -527,7 +527,7 @@ Then use in workflow:
   module: TransformModule
   config:
     input_file: data/quality-metrics.json
-    sidecar_id_path: "id"
+    input_join_key: "id"
     strategy: "merge"
     field_mapping:
       quality_score: "quality_score"
@@ -564,7 +564,7 @@ steps:
     depends_on: [extend]
     config:
       input_file: data/analysis-results.json
-      sidecar_id_path: "id"
+      input_join_key: "id"
       strategy: "merge"
       field_mapping:
         ndvi: "ndvi"
@@ -584,13 +584,13 @@ steps:
 
 ## Troubleshooting
 
-### "Sidecar file not found"
+### "Input file not found"
 
-**Error**: `[enrich] Sidecar file not found: ...`
+**Error**: `[enrich] Input file not found: ...`
 
 **Cause**: Path is relative or file doesn't exist
 
-**Solution**: Generate sidecar data first:
+**Solution**: Generate input data first:
 
 ```bash
 python scripts/generate_sample_data.py \
@@ -598,26 +598,26 @@ python scripts/generate_sample_data.py \
   --collection sentinel-2-l2a
 ```
 
-### "No matching items in sidecar"
+### "No matching items in input data"
 
-**Error**: `[transform] Item ID not found in sidecar data`
+**Error**: `[transform] Item ID not found in input data`
 
-**Cause**: Item IDs don't match between items and sidecar file, or `sidecar_id_path` is incorrect
+**Cause**: Item IDs don't match between items and input file, or `input_join_key` is incorrect
 
-**Solution**: Verify item IDs match and sidecar format is correct:
+**Solution**: Verify item IDs match and input format is correct:
 
 ```bash
 # Check item IDs
 cat samples/sentinel-2-l2a-api/data/items.json | jq '.[] | .id' | head -3
 
-# Check sidecar keys (dict format)
-cat samples/sentinel-2-l2a-api/sidecar-data/cloud-cover.json | jq 'keys' | head -3
+# Check input keys (dict format)
+cat samples/sentinel-2-l2a-api/input-data/cloud-cover.json | jq 'keys' | head -3
 
-# Check sidecar IDs (list format)
-cat samples/sentinel-2-l2a-api/sidecar-data/cloud-cover.json | jq '.[].id' | head -3
+# Check input IDs (list format)
+cat samples/sentinel-2-l2a-api/input-data/cloud-cover.json | jq '.[].id' | head -3
 ```
 
-If using list format, ensure `sidecar_id_path` points to the correct field (default is `"id"`).
+If using list format, ensure `input_join_key` points to the correct field (default is `"id"`).
 
 ### Validation fails after extensions
 
@@ -652,7 +652,7 @@ If using list format, ensure `sidecar_id_path` points to the correct field (defa
 ## Key Takeaways
 
 ✅ STAC Extensions standardize **domain-specific metadata**  
-✅ Sidecar data enables **flexible external enrichment**  
+✅ Input data enables **flexible external enrichment**  
 ✅ Multi-step pipelines combine **multiple transformations**  
 ✅ Complete workflows demonstrate **real-world data processing**  
 
