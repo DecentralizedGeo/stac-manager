@@ -217,7 +217,7 @@ class ExtensionModule:
         
         # 3. Apply assets template (with user defaults)
         if "assets" in self.template:
-            asset_template = self.template["assets"].get("*", {})
+            asset_template = self.template["assets"].get("*") or {}
             
             # Ensure at least one asset exists if requested by user pattern
             if "assets" not in item or not item["assets"]:
