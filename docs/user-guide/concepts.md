@@ -264,15 +264,15 @@ Same wildcard and template variable support as ExtensionModule.
 ```yaml
 module: TransformModule
 config:
-  input_file: data/metrics.json
-  strategy: "merge"  # or 'update'
+  input_file: data/metrics.json   # or .csv
+  strategy: "merge"  # or 'update_existing'
   field_mapping:
     # Key: target field in item.properties
     # Value: JMESPath query on input entry
     cloud_cover: "cloud_cover"
     quality_score: "quality_score"
   handle_missing: "ignore"  # or 'warn', 'error'
-  # input_join_key: "id"  # Only needed for list format
+  # input_join_key: "id"  # Required for list format or CSV
 ```
 
 **Input Format (JSON Dict - recommended):**
@@ -298,11 +298,20 @@ config:
 ]
 ```
 
+**Input Format (CSV - requires input_join_key):**
+
+```csv
+id,cloud_cover,quality_score
+S2A_MSI..._001,15.3,0.95
+```
+
 **How it works:**
 
 1. Looks up item ID in input data
 2. Applies JMESPath queries from `field_mapping` values to input entry
 3. Merges results into `item.properties` using `field_mapping` keys
+
+Note: CSV support uses PyArrow for efficient type inference and loading. The `input_join_key` is forced to a string type to prevent ID mutation.
 
 **Output**: Enriched items with merged data
 

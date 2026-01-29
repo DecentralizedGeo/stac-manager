@@ -435,7 +435,7 @@ Extract nested fields from input data using JMESPath queries:
   config:
     input_file: data/calibration.json
     input_join_key: "id"  # Required for list format
-    strategy: "update"  # Overwrite existing values
+    strategy: "update_existing"  # Update existing fields only
     field_mapping:
       # Key = target field in item.properties
       # Value = JMESPath query applied to input entry
