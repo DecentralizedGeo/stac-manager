@@ -158,7 +158,8 @@ def test_update_module_applies_patch_file_update_only(tmp_path):
     # VALID_ITEM usually has "title" in properties? if not, we should set it to test logic.
     item["properties"]["title"] = "Original Title"
     
-    result = module.modify(item, None)
+    context = MockWorkflowContext.create()
+    result = module.modify(item, context)
     
     assert result["properties"]["title"] == "Patched Title"
     assert "new_field" not in result["properties"]
