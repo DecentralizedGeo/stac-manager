@@ -279,6 +279,7 @@ class OutputResult(TypedDict):
 
 ---
 
+```python
 from pydantic import BaseModel, Field
 from typing import Literal
 
@@ -314,7 +315,7 @@ class WorkflowResult(BaseModel):
         ge=0.0,
         description="Total execution time in seconds"
     )
-
+```
 ---
 
 ## 8. Summary
