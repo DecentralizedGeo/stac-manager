@@ -163,3 +163,39 @@ def test_update_module_applies_patch_file_update_only(tmp_path):
     
     assert result["properties"]["title"] == "Patched Title"
     assert "new_field" not in result["properties"]
+
+
+def test_update_module_removes_wildcard_fields():
+    """UpdateModule removes fields matching wildcard patterns."""
+    module = UpdateModule({
+        "removes": ["assets.*.alternate"]
+    })
+    context = MockWorkflowContext.create()
+    
+    item = VALID_ITEM.copy()
+    item["assets"] = {
+        "blue": {
+            "href": "s3://bucket/blue.tif",
+            "alternate": {"ipfs": {"href": "ipfs://..."}, "filecoin": {"href": "fil://..."}}
+        },
+        "red": {
+            "href": "s3://bucket/red.tif",
+            "alternate": {"ipfs": {"href": "ipfs://..."}}
+        },
+        "metadata": {
+            "href": "s3://bucket/metadata.xml"
+            # No alternate field
+        }
+    }
+    
+    result = module.modify(item, context)
+    
+    # All 'alternate' fields should be removed
+    assert "alternate" not in result["assets"]["blue"]
+    assert "alternate" not in result["assets"]["red"]
+    # metadata has no alternate anyway, but should be unchanged
+    assert "href" in result["assets"]["metadata"]
+    # Other fields should remain
+    assert result["assets"]["blue"]["href"] == "s3://bucket/blue.tif"
+    assert result["assets"]["red"]["href"] == "s3://bucket/red.tif"
+

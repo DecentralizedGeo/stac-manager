@@ -237,6 +237,62 @@ def expand_wildcard_paths(
     return expanded
 
 
+def expand_wildcard_removal_paths(
+    paths: list[str],
+    target_item: dict
+) -> list[tuple[str, ...]]:
+    """
+    Expand wildcard paths to match actual keys in target item for removals.
+    
+    Args:
+        paths: List of paths with potential wildcards (e.g., "assets.*.alternate")
+        target_item: STAC item to match wildcards against
+        
+    Returns:
+        List of expanded path tuples
+        
+    Example:
+        paths = ["assets.*.alternate"]
+        target_item = {"assets": {"blue": {...}, "red": {...}}}
+        
+        Returns:
+        [
+            ("assets", "blue", "alternate"),
+            ("assets", "red", "alternate")
+        ]
+    """
+    expanded = []
+    
+    for path in paths:
+        if "*" not in path:
+            # No wildcard - return as tuple
+            expanded.append(tuple(path.split('.')))
+            continue
+        
+        # Parse path to find wildcard position
+        parts = path.split(".")
+        wildcard_idx = parts.index("*")
+        
+        # Get the parent path parts (before wildcard)
+        parent_parts = parts[:wildcard_idx]
+        
+        # Get parent object from target item
+        parent_obj = get_nested_field(target_item, parent_parts, {}) if parent_parts else target_item
+        
+        if not isinstance(parent_obj, dict):
+            continue
+        
+        # Get the suffix parts (after wildcard)
+        suffix_parts = parts[wildcard_idx + 1:]
+        
+        # Expand to all keys in parent object
+        for key in parent_obj.keys():
+            expanded_path_parts = parent_parts + [key] + suffix_parts
+            expanded.append(tuple(expanded_path_parts))
+    
+    return expanded
+
+
 def _apply_template_variables(value: Any, context: dict) -> Any:
     """
     Apply template variable substitution to a value.

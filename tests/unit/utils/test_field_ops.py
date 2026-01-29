@@ -1,5 +1,8 @@
 import pytest
-from stac_manager.utils.field_ops import set_nested_field, get_nested_field, deep_merge, apply_jmespath
+from stac_manager.utils.field_ops import (
+    set_nested_field, get_nested_field, deep_merge, apply_jmespath,
+    expand_wildcard_removal_paths
+)
 from tests.fixtures.stac_items import VALID_ITEM, NESTED_ITEM
 
 
@@ -80,3 +83,70 @@ def test_apply_jmespath_array_filter():
     """apply_jmespath filters array."""
     result = apply_jmespath(NESTED_ITEM, "properties.instruments[0]")
     assert result == "OLI"
+
+
+def test_expand_wildcard_removal_paths_no_wildcard():
+    """expand_wildcard_removal_paths returns simple path as tuple."""
+    paths = ["properties.deprecated_field"]
+    item = {"properties": {"deprecated_field": "value", "other": "data"}}
+    
+    result = expand_wildcard_removal_paths(paths, item)
+    
+    assert result == [("properties", "deprecated_field")]
+
+
+def test_expand_wildcard_removal_paths_single_wildcard():
+    """expand_wildcard_removal_paths expands wildcard to all matching keys."""
+    paths = ["assets.*.alternate"]
+    item = {
+        "assets": {
+            "blue": {"href": "s3://...", "alternate": {"ipfs": {}}},
+            "red": {"href": "s3://...", "alternate": {"filecoin": {}}},
+            "metadata": {"href": "s3://..."}  # No alternate field
+        }
+    }
+    
+    result = expand_wildcard_removal_paths(paths, item)
+    
+    # Should expand to all asset keys (even if alternate doesn't exist)
+    assert len(result) == 3
+    assert ("assets", "blue", "alternate") in result
+    assert ("assets", "red", "alternate") in result
+    assert ("assets", "metadata", "alternate") in result
+
+
+def test_expand_wildcard_removal_paths_multiple_paths():
+    """expand_wildcard_removal_paths handles multiple removal paths."""
+    paths = ["assets.*.alternate", "properties.old_field"]
+    item = {
+        "assets": {
+            "visual": {"alternate": {}},
+            "B04": {"alternate": {}}
+        },
+        "properties": {"old_field": "value"}
+    }
+    
+    result = expand_wildcard_removal_paths(paths, item)
+    
+    assert len(result) == 3
+    assert ("assets", "visual", "alternate") in result
+    assert ("assets", "B04", "alternate") in result
+    assert ("properties", "old_field") in result
+
+
+def test_expand_wildcard_removal_paths_nested_wildcard():
+    """expand_wildcard_removal_paths handles nested paths after wildcard."""
+    paths = ["assets.*.alternate.ipfs"]
+    item = {
+        "assets": {
+            "blue": {"alternate": {"ipfs": {}, "s3": {}}},
+            "red": {"alternate": {"ipfs": {}}}
+        }
+    }
+    
+    result = expand_wildcard_removal_paths(paths, item)
+    
+    assert len(result) == 2
+    assert ("assets", "blue", "alternate", "ipfs") in result
+    assert ("assets", "red", "alternate", "ipfs") in result
+

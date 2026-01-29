@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 from stac_manager.modules.config import UpdateConfig
 from stac_manager.core.context import WorkflowContext
-from stac_manager.utils.field_ops import deep_merge, expand_wildcard_paths
+from stac_manager.utils.field_ops import deep_merge, expand_wildcard_paths, expand_wildcard_removal_paths
 from stac_manager.exceptions import ConfigurationError, DataProcessingError
 from datetime import datetime, timezone
 
@@ -92,22 +92,29 @@ class UpdateModule:
         """
         context.logger.debug(f"Modifying item {item.get('id', 'unknown')}")
 
-        # 1. Apply strict removals (Global)
+        # 1. Apply strict removals (Global) - with wildcard expansion
         if self.config.removes:
-            for field_path in self.config.removes:
-                # Handle nested removal if needed, for now simple top-level or use utility
-                # For this task, we'll implement simple recursive removal
-                parts = field_path.split('.')
+            # Expand wildcards to get all matching paths
+            expanded_paths = expand_wildcard_removal_paths(
+                self.config.removes,
+                item
+            )
+            
+            # Remove each expanded path
+            for path_tuple in expanded_paths:
+                # Navigate to parent and remove the final key
                 target = item
-                for part in parts[:-1]:
-                    if part in target:
-                        target = target[part]
+                for key in path_tuple[:-1]:
+                    if key in target and isinstance(target[key], dict):
+                        target = target[key]
                     else:
                         break
                 else:
-                    if parts[-1] in target:
-                        del target[parts[-1]]
-                        context.logger.debug(f"Removed field {field_path} from {item.get('id')}")
+                    if path_tuple[-1] in target:
+                        del target[path_tuple[-1]]
+                        context.logger.debug(
+                            f"Removed field {'.'.join(path_tuple)} from {item.get('id')}"
+                        )
         
         # 2. Apply global field updates (with wildcard expansion)
         if self.config.updates:
