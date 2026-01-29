@@ -1,4 +1,4 @@
-"""Transform Module - Sidecar data enrichment."""
+"""Transform Module - Input data enrichment."""
 import json
 import logging
 from pathlib import Path
@@ -26,7 +26,7 @@ class TransformModule:
     def __init__(self, config: dict) -> None:
         """Initialize and load input file."""
         self.config = TransformConfig(**config)
-        self.sidecar_index: dict[str, dict] = {}
+        self.input_index: dict[str, dict] = {}
         
         file_path = Path(self.config.input_file)
         if not file_path.exists():
@@ -60,7 +60,7 @@ class TransformModule:
         # Build index
         for row in rows:
             if join_key in row and row[join_key] is not None:
-                self.sidecar_index[str(row[join_key])] = row
+                self.input_index[str(row[join_key])] = row
 
     def _load_json(self, file_path: Path) -> None:
         """Load JSON file."""
@@ -78,7 +78,7 @@ class TransformModule:
             
         if isinstance(records, dict):
             # Dict: keys are IDs
-            self.sidecar_index = {str(k): v for k, v in records.items()}
+            self.input_index = {str(k): v for k, v in records.items()}
         elif isinstance(records, list):
             # List: extract IDs using jmespath/key
             join_key = self.config.input_join_key
@@ -89,13 +89,13 @@ class TransformModule:
                      item_id = jmespath.search(join_key, entry)
                 
                 if item_id is not None:
-                    self.sidecar_index[str(item_id)] = entry
+                    self.input_index[str(item_id)] = entry
         else:
             raise ConfigurationError("input_file content must be dict or list (after data_path)")
 
     def modify(self, item: dict, context: WorkflowContext) -> dict:
         """
-        Enrich STAC item with sidecar data.
+        Enrich STAC item with input data.
         
         Args:
             item: STAC item dict
@@ -105,27 +105,30 @@ class TransformModule:
             Enriched item dict
         """
         item_id = item.get("id")
-        if not item_id or item_id not in self.sidecar_index:
+        if not item_id or item_id not in self.input_index:
             if self.config.handle_missing == 'warn':
                 context.failure_collector.add(
                     item_id=item_id or "unknown",
-                    error=f"Missing sidecar data for item ID: {item_id}",
+                    error=f"Missing input data for item ID: {item_id}",
                     step_id="transform"
                 )
+                context.logger.warning(f"Missing input data for item ID: {item_id}")
             elif self.config.handle_missing == 'error':
-                raise DataProcessingError(f"Missing sidecar data for item ID: {item_id}")
+                raise DataProcessingError(f"Missing input data for item ID: {item_id}")
             return item
             
-        sidecar_entry = self.sidecar_index[item_id]
+        input_entry = self.input_index[item_id]
+        context.logger.debug(f"Enriching item {item_id} from input data")
         
         # Apply field mapping
         for target_field, source_query in self.config.field_mapping.items():
-            value = self._extract_value(sidecar_entry, source_query)
+            value = self._extract_value(input_entry, source_query)
             
             # If value is None, we skip setting it (to avoid overwriting with Null)
             # Unless we want explicit nulls? Defaulting to skip for now.
             if value is not None:
                 set_nested_field(item, target_field, value)
+                context.logger.debug(f"Mapped {source_query} -> {target_field}")
         
         return item
         
