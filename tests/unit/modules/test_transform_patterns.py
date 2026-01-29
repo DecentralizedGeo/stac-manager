@@ -126,3 +126,48 @@ def test_template_variable_in_jmespath(temp_input_file):
     # For green: assets.{asset_key}.cid becomes assets.green.cid (from input)
     assert result["assets"]["green"]["dgeo:cid"] == "QmGreen456"
     assert result["assets"]["green"]["dgeo:size"] == 2000
+
+
+def test_wildcard_expansion_with_dots_in_keys(temp_input_file, tmp_path):
+    """Assets with dots in keys (e.g. ANG.txt) should be handled correctly."""
+    # Update input file to include a dot-key
+    data = {
+        "item-1": {
+            "assets": {
+                "ANG.txt": {"href": "new-href-ang"},
+                "normal": {"href": "new-href-normal"}
+            }
+        }
+    }
+    temp_input_file.write_text(json.dumps(data))
+
+    config = {
+        "input_file": str(temp_input_file),
+        "field_mapping": {
+            # Note: We must quote the source path variable to handle dots in JMESPath
+            "assets.*.href": 'assets."{asset_key}".href'
+        },
+        "strategy": "merge"
+    }
+    
+    module = TransformModule(config)
+    
+    item = {
+        "id": "item-1",
+        "assets": {
+            "ANG.txt": {"href": "old-href"},
+            "normal": {"href": "old-href"}
+        }
+    }
+    
+    context = MockWorkflowContext.create()
+    result = module.modify(item, context)
+    
+    # Check normal asset
+    assert result["assets"]["normal"]["href"] == "new-href-normal"
+    
+    # Check asset with dot - should be updated in place, not split
+    assert result["assets"]["ANG.txt"]["href"] == "new-href-ang"
+    
+    # Verify no erroneous keys were created
+    assert "ANG" not in result["assets"]

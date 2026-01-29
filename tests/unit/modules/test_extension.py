@@ -232,3 +232,36 @@ def test_extension_module_honors_required_fields_only():
         })
         assert "req:field" in module_all.template["properties"]
         assert "opt:field" in module_all.template["properties"]
+
+
+def test_defaults_with_quoted_keys():
+    """ExtensionModule handles quoted keys in defaults."""
+    with requests_mock.Mocker() as m:
+        m.get("https://example.com/schema.json", json=SIMPLE_SCHEMA)
+        
+        module = ExtensionModule({
+            "schema_uri": "https://example.com/schema.json",
+            "defaults": {
+                # This should parse to ["assets", "ANG.txt", "title"]
+                'assets."ANG.txt".title': "My Title"
+            }
+        })
+        
+        # Build a valid item
+        from tests.fixtures.stac_items import VALID_ITEM
+        item = VALID_ITEM.copy()
+        item["assets"] = {
+            "ANG.txt": {"href": "s3://ang.txt"},
+            "normal": {"href": "s3://normal.tif"}
+        }
+        
+        context = MockWorkflowContext.create()
+        result = module.modify(item, context)
+        
+        # Check quoted key default applied correctly
+        assert "ANG.txt" in result["assets"]
+        # With the fix, the path should be parsed correctly and set on the asset
+        assert result["assets"]["ANG.txt"].get("title") == "My Title"
+        
+        # Check normal asset (not affected since default was specific to ANG.txt)
+        assert "title" not in result["assets"]["normal"]
