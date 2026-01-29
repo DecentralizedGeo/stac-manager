@@ -14,5 +14,5 @@ outputs
 
 # misc folders and files
 archive
-
+/examples/**
 
