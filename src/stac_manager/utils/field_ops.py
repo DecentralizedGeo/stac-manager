@@ -204,7 +204,7 @@ def expand_wildcard_paths(
             # No wildcard - apply template variables and keep as-is
             expanded_value = _apply_template_variables(value, context)
             # Use tuple of keys even for simple paths to remain consistent
-            expanded[tuple(path.split('.'))] = expanded_value
+            expanded[tuple(parse_field_path(path))] = expanded_value
             continue
         
         # Parse path to find wildcard position
@@ -266,11 +266,11 @@ def expand_wildcard_removal_paths(
     for path in paths:
         if "*" not in path:
             # No wildcard - return as tuple
-            expanded.append(tuple(path.split('.')))
+            expanded.append(tuple(parse_field_path(path)))
             continue
         
         # Parse path to find wildcard position
-        parts = path.split(".")
+        parts = parse_field_path(path)
         wildcard_idx = parts.index("*")
         
         # Get the parent path parts (before wildcard)
