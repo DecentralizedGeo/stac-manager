@@ -29,7 +29,8 @@ def test_transform_csv_inference_and_id_safety():
             "field_mapping": {
                 "properties.eo:cloud_cover": "cloud_cover",
                 "properties.name": "name"
-            }
+            },
+            "strategy": "merge"  # Create new properties
         })
         
         # Test ID indexing (should find "007" as string)
@@ -83,7 +84,8 @@ def test_transform_hybrid_field_mapping():
                 "properties.extracted": "complex.list[0].attr",
                 # Nested target creation
                 "properties.meta.info": "simple_field"
-            }
+            },
+            "strategy": "merge"  # Create new properties
         })
         
         item = {"id": "item-001", "properties": {}}
@@ -118,7 +120,8 @@ def test_transform_nested_object_mapping():
             "field_mapping": {
                 # Map list object to property
                 "properties.instruments": "telemetry.sensors"
-            }
+            },
+            "strategy": "merge"  # Create new property
         })
         
         item = {"id": "item-001", "properties": {}}

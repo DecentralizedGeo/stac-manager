@@ -94,7 +94,8 @@ def test_transform_module_enrich_explicit_mapping():
             "field_mapping": {
                 "properties.new_field": "new_field",
                 # Note: "existing_field" not mapped, so it shouldn't touch existing property
-            }
+            },
+            "strategy": "merge"  # Explicitly create new fields
         })
         
         item = {
@@ -162,7 +163,8 @@ def test_transform_module_field_mapping_custom_target():
             "input_file": temp_path,
             "field_mapping": {
                 "properties.analysis.score": "raw_score"
-            }
+            },
+            "strategy": "merge"  # Explicitly create new nested structure
         })
         
         item = {"id": "item-001", "properties": {}}
