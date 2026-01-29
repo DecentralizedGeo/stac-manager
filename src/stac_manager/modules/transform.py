@@ -152,15 +152,13 @@ class TransformModule:
                 result = get_nested_field(item, key_tuple, default=_MISSING)
                 if result is not _MISSING:
                     # Field exists (even if value is None)
-                    target_field = ".".join(key_tuple)
-                    final_mapping[target_field] = source_query
+                    final_mapping[key_tuple] = source_query
                 # else: Path doesn't exist, skip it
         else:  # merge strategy
             # Convert all tuple keys to string keys
             final_mapping = {}
             for key_tuple, source_query in expanded_tuples.items():
-                target_field = ".".join(key_tuple)
-                final_mapping[target_field] = source_query
+                final_mapping[key_tuple] = source_query
         
         # Apply field mapping
         for target_field, source_query in final_mapping.items():
