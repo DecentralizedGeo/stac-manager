@@ -97,35 +97,62 @@ class TransformModule:
         """
         Enrich STAC item with input data.
         
-        Args:
-            item: STAC item dict
-            context: Workflow context
-            
-        Returns:
-            Enriched item dict
+        Supports wildcard patterns like `assets.*` and template variables
+        like `{item_id}`, `{collection_id}`, `{asset_key}` in field mapping.
         """
+        from stac_manager.utils.field_ops import expand_wildcard_paths, set_nested_field,get_nested_field
+        
         item_id = item.get("id")
         if not item_id or item_id not in self.input_index:
             if self.config.handle_missing == 'warn':
                 context.failure_collector.add(
                     item_id=item_id or "unknown",
-                    error=f"Missing input data for item ID: {item_id}",
-                    step_id="transform"
+                    error="Missing input data",
+                    step_id=context.workflow_id
                 )
-                context.logger.warning(f"Missing input data for item ID: {item_id}")
             elif self.config.handle_missing == 'error':
-                raise DataProcessingError(f"Missing input data for item ID: {item_id}")
+                raise DataProcessingError(f"Missing input data for item {item_id}")
             return item
             
         input_entry = self.input_index[item_id]
         context.logger.debug(f"Enriching item {item_id} from input data")
         
+        # Expand wildcards in field_mapping
+        context_dict = {
+            "item_id": item_id,
+            "collection_id": context.data.get("collection_id", "")
+        }
+        # expand_wildcard_paths returns dict with tuple keys
+        expanded_tuples = expand_wildcard_paths(
+            self.config.field_mapping,
+            item,  # Match wildcards against item structure
+            context_dict
+        )
+        
+        # Convert tuple keys to dot-notation strings
+        expanded_mapping = {}
+        for key_tuple, source_query in expanded_tuples.items():
+            target_field = ".".join(key_tuple)
+            expanded_mapping[target_field] = source_query
+        
+        # Filter based on strategy
+        if self.config.strategy == 'update_existing':
+            # Only apply mappings where target path exists in item
+            final_mapping = {}
+            for target_field, source_query in expanded_mapping.items():
+                try:
+                    get_nested_field(item, target_field)
+                    final_mapping[target_field] = source_query
+                except (KeyError, TypeError):
+                    # Path doesn't exist, skip it
+                    pass
+        else:  # merge strategy
+            final_mapping = expanded_mapping
+        
         # Apply field mapping
-        for target_field, source_query in self.config.field_mapping.items():
+        for target_field, source_query in final_mapping.items():
             value = self._extract_value(input_entry, source_query)
             
-            # If value is None, we skip setting it (to avoid overwriting with Null)
-            # Unless we want explicit nulls? Defaulting to skip for now.
             if value is not None:
                 set_nested_field(item, target_field, value)
                 context.logger.debug(f"Mapped {source_query} -> {target_field}")
