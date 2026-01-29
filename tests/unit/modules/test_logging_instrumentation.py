@@ -123,7 +123,8 @@ async def test_transform_module_logs_enrichment():
     config = {
         "input_file": "sidecar.csv", # Mocked
         "input_join_key": "id",
-        "field_mapping": {"properties.enrich": "data_column"}
+        "field_mapping": {"properties.enrich": "data_column"},
+        "strategy": "merge"  # Create new property
     }
     
     from stac_manager.modules.transform import TransformModule
@@ -133,7 +134,7 @@ async def test_transform_module_logs_enrichment():
         with patch('pathlib.Path.exists', return_value=True):
             module = TransformModule(config)
             # Manually set index after init
-            module.sidecar_index = {"test-item": {"data_column": "enriched"}}
+            module.input_index = {"test-item": {"data_column": "enriched"}}
             
             # Process item
             item = {"id": "test-item", "properties": {}}
@@ -143,7 +144,7 @@ async def test_transform_module_logs_enrichment():
             # Expecting DEBUG log about enrichment
             debug_calls = [args[0] for args, _ in mock_logger.debug.call_args_list]
             assert any("test-item" in str(call) for call in debug_calls)
-            assert any("enriched" in str(call) or "sidecar" in str(call) for call in debug_calls)
+            assert any("Enriching" in str(call) or "input" in str(call) for call in debug_calls)
 
 @pytest.mark.asyncio
 async def test_output_module_logs_writes(tmp_path):
