@@ -226,7 +226,7 @@ from stac_manager import StacManager
 from pathlib import Path
 
 # Load workflow
-workflow_path = Path("samples/HLSS30_2.0-api/workflows/00-quickstart.yaml")
+workflow_path = Path("samples/sentinel-2-l2a-api/workflows/00-quickstart.yaml")
 manager = StacManager.from_yaml(workflow_path)
 
 # Execute
