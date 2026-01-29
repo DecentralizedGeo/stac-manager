@@ -319,3 +319,23 @@ def _apply_template_variables(value: Any, context: dict) -> Any:
             result = result.replace(placeholder, str(var_value))
     
     return result
+
+
+def dot_notation_to_nested(dot_dict: dict) -> dict:
+    """
+    Convert dot-notation dictionary to nested dictionary structure.
+    
+    Args:
+        dot_dict: Dictionary with dot-notation keys
+        
+    Returns:
+        Nested dictionary
+        
+    Example:
+        {"properties.platform": "sentinel-2"}
+        -> {"properties": {"platform": "sentinel-2"}}
+    """
+    result = {}
+    for key, value in dot_dict.items():
+        set_nested_field(result, key, value)
+    return result

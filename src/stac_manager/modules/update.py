@@ -3,55 +3,9 @@ import json
 from pathlib import Path
 from stac_manager.modules.config import UpdateConfig
 from stac_manager.core.context import WorkflowContext
-from stac_manager.utils.field_ops import deep_merge, expand_wildcard_paths, expand_wildcard_removal_paths
-from stac_manager.exceptions import ConfigurationError, DataProcessingError
+from stac_manager.utils.field_ops import deep_merge, expand_wildcard_paths, expand_wildcard_removal_paths, set_nested_field
+from stac_manager.exceptions import ConfigurationError
 from datetime import datetime, timezone
-
-
-def dot_notation_to_nested(dot_dict: dict) -> dict:
-    """
-    Convert dot-notation dictionary to nested dictionary structure.
-    
-    Args:
-        dot_dict: Dictionary with dot-notation keys
-        
-    Returns:
-        Nested dictionary
-        
-    Example:
-        {"properties.platform": "sentinel-2"}
-        -> {"properties": {"platform": "sentinel-2"}}
-    """
-    from stac_manager.utils.field_ops import set_nested_field
-    result = {}
-    for key, value in dot_dict.items():
-        set_nested_field(result, key, value)
-    return result
-
-
-def set_field_with_path_creation(item: dict, path: str | list[str] | tuple[str, ...], value: Any, create_paths: bool) -> None:
-    """
-    Set nested field with optional path creation and error handling.
-    """
-    if isinstance(path, str):
-        keys = path.split('.')
-    else:
-        keys = list(path)
-        
-    current = item
-    
-    for i, key in enumerate(keys[:-1]):
-        if key not in current:
-            if not create_paths:
-                raise DataProcessingError(f"Path does not exist: {'.'.join(keys[:i+1])}")
-            current[key] = {}
-        
-        if not isinstance(current[key], dict):
-            raise DataProcessingError(f"Cannot traverse non-dict at: {'.'.join(keys[:i+1])}")
-        
-        current = current[key]
-    
-    current[keys[-1]] = value
 
 
 class UpdateModule:

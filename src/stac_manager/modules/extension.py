@@ -6,27 +6,7 @@ from typing import Any
 from stac_manager.modules.config import ExtensionConfig
 from stac_manager.core.context import WorkflowContext
 from stac_manager.exceptions import ConfigurationError
-from stac_manager.utils.field_ops import deep_merge, set_nested_field, expand_wildcard_paths
-
-
-def dot_notation_to_nested(dot_dict: dict) -> dict:
-    """
-    Convert dot-notation dictionary to nested dictionary structure.
-    
-    Args:
-        dot_dict: Dictionary with dot-notation keys
-        
-    Returns:
-        Nested dictionary
-        
-    Example:
-        {"assets.thumbnail.alternate.s3.href": "s3://bucket/"}
-        -> {"assets": {"thumbnail": {"alternate": {"s3": {"href": "s3://bucket/"}}}}}
-    """
-    result = {}
-    for key, value in dot_dict.items():
-        set_nested_field(result, key, value)
-    return result
+from stac_manager.utils.field_ops import deep_merge, set_nested_field, expand_wildcard_paths, dot_notation_to_nested
 
 
 class ExtensionModule:
