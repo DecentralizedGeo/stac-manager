@@ -44,7 +44,7 @@ class TransformConfig(BaseModel):
     field_mapping: Dict[str, str] = Field(description="Map target_field -> source_field")
     
     handle_missing: Literal['ignore', 'warn', 'error'] = 'ignore'
-    strategy: Literal['merge', 'update'] = 'merge'
+    strategy: Literal['update_existing', 'merge'] = 'update_existing'
 
 
 class IngestConfig(BaseModel):
