@@ -188,12 +188,21 @@ class IngestModule:
                 
                 print(f"Loaded {len(items)} items")
         """
+        context.logger.info(f"Starting ingest from {self.config.mode} source: {self.config.source}")
+        
+        count = 0
         if self.config.mode == "file":
             async for item in self._fetch_from_file():
+                context.logger.debug(f"Fetched item {item.get('id', 'unknown')}")
                 yield item
+                count += 1
         else:
             async for item in self._fetch_from_api(context):
+                context.logger.debug(f"Fetched item {item.get('id', 'unknown')}")
                 yield item
+                count += 1
+                
+        context.logger.info(f"Ingest complete. Total {count} items fetched.")
     
     async def _fetch_from_file(self) -> AsyncIterator[dict]:
         """Fetch items from local file or directory with smart detection."""

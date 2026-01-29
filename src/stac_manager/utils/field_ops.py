@@ -5,6 +5,50 @@ import copy
 from stac_manager.exceptions import DataProcessingError
 
 
+def parse_field_path(path: str) -> list[str]:
+    """
+    Parse a field path string into a list of keys, handling quoted keys with dots.
+    
+    Args:
+        path: Dot-separated path string
+        
+    Returns:
+        List of keys
+        
+    Example:
+        'assets."ANG.txt".alternate' -> ['assets', 'ANG.txt', 'alternate']
+        'properties.dgeo:cids' -> ['properties', 'dgeo:cids']
+    """
+    keys = []
+    current_key = []
+    in_quote = False
+    quote_char = None
+    
+    for char in path:
+        if in_quote:
+            if char == quote_char:
+                in_quote = False
+            else:
+                current_key.append(char)
+        else:
+            if char == '"' or char == "'":
+                in_quote = True
+                quote_char = char
+            elif char == '.':
+                keys.append("".join(current_key))
+                current_key = []
+            else:
+                current_key.append(char)
+                
+    if current_key:
+        keys.append("".join(current_key))
+    elif path.endswith('.'):
+        # Handle trailing dot if necessary
+        keys.append("")
+        
+    return keys
+
+
 def set_nested_field(item: dict, path: str | list[str] | tuple[str, ...], value: Any) -> None:
     """
     Set nested field using dot notation or list of keys.
@@ -16,7 +60,7 @@ def set_nested_field(item: dict, path: str | list[str] | tuple[str, ...], value:
         value: Value to set
     """
     if isinstance(path, str):
-        keys = path.split('.')
+        keys = parse_field_path(path)
     else:
         keys = list(path)
         
@@ -43,7 +87,7 @@ def get_nested_field(item: dict, path: str | list[str] | tuple[str, ...], defaul
         Field value or default
     """
     if isinstance(path, str):
-        keys = path.split('.')
+        keys = parse_field_path(path)
     else:
         keys = list(path)
         

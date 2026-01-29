@@ -97,6 +97,13 @@ class TransformModule:
         """
         Enrich STAC item with input data.
         
+        Args:
+            item: STAC item dict
+            context: Workflow context
+            
+        Returns:
+            Enriched item dict
+
         Supports wildcard patterns like `assets.*` and template variables
         like `{item_id}`, `{collection_id}`, `{asset_key}` in field mapping.
         """
@@ -129,30 +136,33 @@ class TransformModule:
             context_dict
         )
         
-        # Convert tuple keys to dot-notation strings
-        expanded_mapping = {}
-        for key_tuple, source_query in expanded_tuples.items():
-            target_field = ".".join(key_tuple)
-            expanded_mapping[target_field] = source_query
-        
         # Filter based on strategy
         if self.config.strategy == 'update_existing':
             # Only apply mappings where target path exists in item
+            # Use tuple keys to check existence (handles keys with colons correctly)
+            _MISSING = object()  # Sentinel value
             final_mapping = {}
-            for target_field, source_query in expanded_mapping.items():
-                try:
-                    get_nested_field(item, target_field)
+            for key_tuple, source_query in expanded_tuples.items():
+                # Check if field exists using sentinel
+                result = get_nested_field(item, key_tuple, default=_MISSING)
+                if result is not _MISSING:
+                    # Field exists (even if value is None)
+                    target_field = ".".join(key_tuple)
                     final_mapping[target_field] = source_query
-                except (KeyError, TypeError):
-                    # Path doesn't exist, skip it
-                    pass
+                # else: Path doesn't exist, skip it
         else:  # merge strategy
-            final_mapping = expanded_mapping
+            # Convert all tuple keys to string keys
+            final_mapping = {}
+            for key_tuple, source_query in expanded_tuples.items():
+                target_field = ".".join(key_tuple)
+                final_mapping[target_field] = source_query
         
         # Apply field mapping
         for target_field, source_query in final_mapping.items():
             value = self._extract_value(input_entry, source_query)
             
+            # If value is None, we skip setting it (to avoid overwriting with Null)
+            # Unless we want explicit nulls? Defaulting to skip for now.
             if value is not None:
                 set_nested_field(item, target_field, value)
                 context.logger.debug(f"Mapped {source_query} -> {target_field}")

@@ -176,6 +176,7 @@ class OutputModule:
         if not self.collection_created:
             await self._create_collection(context)
             self.collection_created = True
+            context.logger.info(f"Initialized output for collection {self.collection_id}")
 
         # Add relative self link to item
         item = self._add_item_links(item)
@@ -241,6 +242,7 @@ class OutputModule:
                 await asyncio.to_thread(os.replace, str(temp_path), str(item_path))
 
                 self.items_written += 1
+                context.logger.debug(f"Writing item {item_id} to {item_path}")
 
             except Exception:
                 # Clean up temp file on error
@@ -284,6 +286,7 @@ class OutputModule:
             await asyncio.to_thread(os.replace, str(temp_path), str(parquet_path))
 
             self.items_written += len(self.buffer)
+            context.logger.debug(f"Writing batch of {len(self.buffer)} items to {parquet_path}")
 
         except Exception:
             # Clean up temp file on error
@@ -328,7 +331,7 @@ class OutputModule:
         # Add relative parent link (collection)
         item["links"].append({
             "rel": "parent",
-            "href": "../collection.json",
+            "href": "../collections.json",
             "type": "application/json"
         })
 

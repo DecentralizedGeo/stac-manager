@@ -26,20 +26,27 @@ class SeedModule:
         """
         items_list = self.config.items or []
         
+        context.logger.info(f"Starting seed generation. Configured items: {len(items_list)}")
+        
         # Load tokens from file if configured
         if self.config.source_file:
             path = Path(self.config.source_file)
             if path.exists():
+                context.logger.info(f"Loading seed items from file: {path}")
                 with open(path, 'r', encoding='utf-8') as f:
                     file_items = json.load(f)
                     if isinstance(file_items, list):
                         items_list.extend(file_items)
+                        context.logger.debug(f"Loaded {len(file_items)} items from file")
             else:
+                context.logger.warning(f"Source file not found: {path}")
                 context.failure_collector.add(
                     item_id="global",
                     error=f"Source file not found: {path}",
                     step_id="seed"
                 )
+        
+        count = 0
         
         for item_entry in items_list:
 
@@ -64,4 +71,8 @@ class SeedModule:
                 item_dict["collection"] = context.data["collection_id"]
             
             yield item_dict
+            context.logger.debug(f"Generated seed item: {item_dict.get('id', 'unknown')}")
+            count += 1
+            
+        context.logger.info(f"Seed generation complete. Total {count} items yielded.")
 

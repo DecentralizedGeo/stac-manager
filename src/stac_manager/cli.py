@@ -7,25 +7,7 @@ from pathlib import Path
 from stac_manager import __version__, StacManager
 from stac_manager.core import load_workflow_from_yaml, build_execution_order
 from stac_manager.exceptions import ConfigurationError
-
-
-def setup_logging(log_level: str):
-    """Configure logging for CLI."""
-    # Create console handler
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(getattr(logging, log_level.upper()))
-
-    # Create formatter
-    formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
-    console_handler.setFormatter(formatter)
-
-    # Configure root logger
-    root_logger = logging.getLogger()
-    root_logger.setLevel(getattr(logging, log_level.upper()))
-    root_logger.addHandler(console_handler)
+from stac_manager.utils.logging import setup_logger, LogRunContext
 
 
 @click.group()
@@ -120,13 +102,19 @@ def run_workflow(ctx, config_file, checkpoint_dir, dry_run):
     """
     log_level = ctx.obj.get('log_level', 'INFO')
 
-    # Setup logging
-    setup_logging(log_level)
-
     try:
-        # Load workflow
+        # Load workflow to get settings for logger (config might overlap with CLI args)
         click.echo(f"Loading workflow: {config_file}")
         workflow = load_workflow_from_yaml(Path(config_file))
+        
+        # Override log level if specified in CLI (optional - design choice: CLI args override config)
+        # But we need basic logging setup before we even get deep into execution
+        # Let's pass the full config dictionary to setup_logger if possible, 
+        # or just a minimal one if we want CLI precedence.
+        # StacManager expects a certain config structure.
+        
+        # For LogContext, we need the logger instance
+        logger = setup_logger(workflow.model_dump())
 
         if dry_run:
             # Validate only
@@ -143,56 +131,57 @@ def run_workflow(ctx, config_file, checkpoint_dir, dry_run):
             click.echo(click.style("\n✓ Configuration is valid", fg='green'))
             sys.exit(0)
 
-        # Execute workflow
-        click.echo(f"\nExecuting workflow: {workflow.name}")
+        # Execute workflow inside logging context
+        with LogRunContext(logger, workflow.name, str(config_file)):
+            click.echo(f"\nExecuting workflow: {workflow.name}")
 
-        manager = StacManager(
-            config=workflow,
-            checkpoint_dir=Path(checkpoint_dir),
-            log_level=log_level
-        )
+            manager = StacManager(
+                config=workflow,
+                checkpoint_dir=Path(checkpoint_dir),
+                log_level=log_level
+            )
 
-        # Run async execution
-        result = asyncio.run(manager.execute())
+            # Run async execution
+            result = asyncio.run(manager.execute())
 
-        # Handle results (single or matrix)
-        if isinstance(result, list):
-            # Matrix strategy results
-            click.echo(f"\n{'='*60}")
-            click.echo("MATRIX STRATEGY RESULTS")
-            click.echo(f"{'='*60}")
+            # Handle results (single or matrix)
+            if isinstance(result, list):
+                # Matrix strategy results
+                click.echo(f"\n{'='*60}")
+                click.echo("MATRIX STRATEGY RESULTS")
+                click.echo(f"{'='*60}")
 
-            for i, r in enumerate(result, 1):
-                status_color = 'green' if r.success else 'red'
-                click.echo(f"\nPipeline {i}: ", nl=False)
-                click.echo(click.style(r.status, fg=status_color))
-                click.echo(f"  Items processed: {r.total_items_processed}")
-                click.echo(f"  Failures: {r.failure_count}")
+                for i, r in enumerate(result, 1):
+                    status_color = 'green' if r.success else 'red'
+                    click.echo(f"\nPipeline {i}: ", nl=False)
+                    click.echo(click.style(r.status, fg=status_color))
+                    click.echo(f"  Items processed: {r.total_items_processed}")
+                    click.echo(f"  Failures: {r.failure_count}")
 
-            # Overall summary
-            successful = sum(1 for r in result if r.success)
-            total_items = sum(r.total_items_processed for r in result)
-            total_failures = sum(r.failure_count for r in result)
+                # Overall summary
+                successful = sum(1 for r in result if r.success)
+                total_items = sum(r.total_items_processed for r in result)
+                total_failures = sum(r.failure_count for r in result)
 
-            click.echo(f"\n{'='*60}")
-            click.echo(f"Overall: {successful}/{len(result)} pipelines succeeded")
-            click.echo(f"Total items: {total_items}")
-            click.echo(f"Total failures: {total_failures}")
+                click.echo(f"\n{'='*60}")
+                click.echo(f"Overall: {successful}/{len(result)} pipelines succeeded")
+                click.echo(f"Total items: {total_items}")
+                click.echo(f"Total failures: {total_failures}")
 
-            sys.exit(0 if successful == len(result) else 1)
-        else:
-            # Single pipeline result
-            click.echo(f"\n{'='*60}")
-            click.echo("WORKFLOW RESULTS")
-            click.echo(f"{'='*60}")
+                sys.exit(0 if successful == len(result) else 1)
+            else:
+                # Single pipeline result
+                click.echo(f"\n{'='*60}")
+                click.echo("WORKFLOW RESULTS")
+                click.echo(f"{'='*60}")
 
-            status_color = 'green' if result.success else 'red'
-            click.echo("Status: ", nl=False)
-            click.echo(click.style(result.status, fg=status_color))
-            click.echo(f"Items processed: {result.total_items_processed}")
-            click.echo(f"Failures: {result.failure_count}")
+                status_color = 'green' if result.success else 'red'
+                click.echo("Status: ", nl=False)
+                click.echo(click.style(result.status, fg=status_color))
+                click.echo(f"Items processed: {result.total_items_processed}")
+                click.echo(f"Failures: {result.failure_count}")
 
-            sys.exit(0 if result.success else 1)
+                sys.exit(0 if result.success else 1)
 
     except ConfigurationError as e:
         click.echo(click.style(f"✗ Configuration error: {e}", fg='red'), err=True)

@@ -90,6 +90,8 @@ class UpdateModule:
         Returns:
             Modified item dict
         """
+        context.logger.debug(f"Modifying item {item.get('id', 'unknown')}")
+
         # 1. Apply strict removals (Global)
         if self.config.removes:
             for field_path in self.config.removes:
@@ -105,6 +107,7 @@ class UpdateModule:
                 else:
                     if parts[-1] in target:
                         del target[parts[-1]]
+                        context.logger.debug(f"Removed field {field_path} from {item.get('id')}")
         
         # 2. Apply global field updates (with wildcard expansion)
         if self.config.updates:
@@ -117,6 +120,9 @@ class UpdateModule:
                     "collection_id": item.get("collection")
                 }
             )
+            
+            if expanded_updates:
+                context.logger.debug(f"Applying updates to fields {list(expanded_updates.keys())} for {item.get('id')}")
             
             # Apply each expanded update
             for field_path, value in expanded_updates.items():
@@ -132,6 +138,7 @@ class UpdateModule:
             item_id = item.get("id")
             if item_id and item_id in self.patches:
                 patch_data = self.patches[item_id]
+                context.logger.debug(f"Applying patch to {item_id}")
                 
                 if self.config.mode == 'replace':
                     item = patch_data

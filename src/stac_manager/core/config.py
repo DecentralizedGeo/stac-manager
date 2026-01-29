@@ -31,6 +31,7 @@ class WorkflowDefinition(BaseModel):
         description="Whether to resume from existing checkpoints. Set to False to ignore and overwrite existing checkpoints."
     )
     
+    settings: dict[str, Any] | None = None
     strategy: StrategyConfig = Field(default_factory=StrategyConfig)
     steps: list[StepConfig]
 
