@@ -9,7 +9,7 @@
 
 ## What is STAC Manager?
 
-STAC Manager is a Python library for building, orchestrating, and executing modular STAC data pipelines. It enables you to ingest STAC items from APIs or files, transform and enrich Item metadata, validate Item compliance, extend Items with extension properties, and output to various formats—all through declarative YAML configuration or a programmatic Python API.
+STAC Manager is a Python library for building, orchestrating, and executing modular STAC data pipelines. It enables you to ingest STAC items from APIs or files, transform and enrich Item metadata from external input data (JSON/CSV), validate Item compliance, extend Items with extension properties, and output to various formats—all through declarative YAML configuration or a programmatic Python API.
 
 Built on the **Pipes and Filters** architecture, STAC Manager provides 7 specialized modules that compose into powerful workflows while maintaining simplicity and testability.
 
@@ -20,6 +20,7 @@ Built on the **Pipes and Filters** architecture, STAC Manager provides 7 special
 - 🔌 **Modular Architecture**: 7 pipeline modules (Ingest, Seed, Transform, Update, Validate, Extension, Output)
 - 📝 **Declarative Configuration**: Define workflows in YAML with full validation
 - 🔄 **Streaming Pipeline**: Process millions of items with constant memory usage
+- 🎯 **Wildcard Patterns**: Bulk update assets using `assets.*` syntax with template variables
 - ✅ **STAC Compliance**: Built-in validation using `stac-validator`
 - 🎯 **Matrix Strategies**: Run parallel pipelines for multiple collections
 - 💾 **Checkpoint Resume**: Recover from failures without re-processing completed items
