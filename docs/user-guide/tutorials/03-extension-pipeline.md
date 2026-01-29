@@ -46,43 +46,32 @@ steps:
     module: ExtensionModule
     depends_on: [ingest]
     config:
-      extensions:
-        - name: eo
-          properties:
-            bands:
-              - name: "B2"
-                description: "Blue"
-                common_name: "blue"
-              # ... more bands
+      schema_uri: "https://stac-extensions.github.io/alternate-assets/v1.2.0/schema.json"
+      defaults:
+        assets.*.alternate.s3.href: "s3://example-bucket/{collection_id}/{asset_key}/"
+        assets.*.alternate.s3.alternate:name: "S3"
+        assets.*.alternate:name: "HTTPS"
+      required_fields_only: true
 
-        - name: projection
-          properties:
-            epsg: 32633
-
-        - name: raster
-          properties:
-            type: "COG"
-
-  - id: enrich
+  - id: transform
     module: TransformModule
     depends_on: [extend]
     config:
       input_file: samples/sentinel-2-l2a-api/input-data/cloud-cover.json
-      input_join_key: "id"
       strategy: "merge"
       field_mapping:
-        cloud_cover: "cloud_cover"
-        snow_cover: "snow_cover"
+        cloud_cover_extra: "cloud_cover"
+        snow_cover_extra: "snow_cover"
 
   - id: validate
     module: ValidateModule
-    depends_on: [enrich]
+    depends_on: [transform]
     config:
       strict: true
 
   - id: output
     module: OutputModule
-    depends_on: [validate]
+    depends_on: [transform]
     config:
       base_dir: ./outputs
       format: json
@@ -126,10 +115,10 @@ stac-manager run-workflow samples/sentinel-2-l2a-api/workflows/03-extension-pipe
 ```
 Starting workflow: extension-pipeline
 [ingest] Loaded 20 items from file
-[extend] Adding extensions: eo, projection, raster
+[extend] Adding extension: alternate-assets
 [extend] Added extensions to 20 items
-[enrich] Loading input data from cloud-cover.json
-[enrich] Merged input data for 20 items
+[transform] Loading input data from cloud-cover.json
+[transform] Merged input data for 20 items
 [validate] Validated 20 items (0 errors)
 [output] Wrote 20 items to ./outputs/sentinel-2-l2a-tutorial-03
 ✓ Workflow completed successfully
@@ -281,32 +270,35 @@ This approach is much simpler than the old method of manually adding extension p
 ]
 ```
 
-> **Note**: TransformModule only supports JSON format, not CSV.
+> **Note**: TransformModule supports both **JSON** and **CSV** formats for input data. CSV files are loaded using PyArrow for efficient processing.
 
 ### TransformModule in Detail
 
 The TransformModule merges input data with items:
 
 ```yaml
-- id: enrich
-  module: TransformModule
-  depends_on: [extend]
-  config:
-    # Source of input data (JSON file)
-    input_file: samples/sentinel-2-l2a-api/input-data/cloud-cover.json
+  - id: enrich
+    module: TransformModule
+    depends_on: [extend]
+    config:
+      input_file: samples/sentinel-2-l2a-api/input-data/cloud-cover.json
+      strategy: "merge"
+      field_mapping:
+        cloud_cover: "cloud_cover"
+        snow_cover: "snow_cover"
+      handle_missing: "ignore"
 
-    # How to merge: 'merge' (keep existing) or 'update' (overwrite)
-    strategy: "merge"
-
-    # Optional: Map input fields to item properties
-    # Key = target field name in item properties
-    # Value = JMESPath query applied to input entry
-    field_mapping:
-      cloud_cover: "cloud_cover"  # item.properties.cloud_cover ← input_entry.cloud_cover
-      snow_cover: "snow_cover"    # item.properties.snow_cover ← input_entry.snow_cover
-
-    # Optional: How to handle missing input data
-    handle_missing: "ignore"  # or 'warn', 'error'
+  # CSV input pattern
+  - id: enrich_csv
+    module: TransformModule
+    depends_on: [enrich]
+    config:
+      input_file: samples/sentinel-2-l2a-api/input-data/cloud-cover.csv
+      input_join_key: "item_id"
+      strategy: "merge"
+      field_mapping:
+        cloud_cover_csv: "cloud_cover"
+        snow_cover_csv: "snow_cover"
 ```
 
 **How field_mapping works:**
