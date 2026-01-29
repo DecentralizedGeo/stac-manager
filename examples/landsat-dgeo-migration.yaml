@@ -115,106 +115,18 @@ steps:
       # Log warnings for items missing in metadata file
       handle_missing: "warn"
       
-      # Field mapping: source field (JMESPath) -> target field (dot notation)
+      # Field mapping using wildcard patterns (applies to ALL assets)
+      # Replaces 72 explicit mappings (24 assets × 3 fields) with 3 rules!
       field_mapping:
-        # Band Assets
-        assets.blue.alternate: "assets.blue.alternates"
-        assets.blue.href: "assets.blue.alternates.ipfs.href"
-        assets.blue.type: "assets.blue.alternates.ipfs.type"
+        # For ALL assets: set alternate field from input data
+        # {asset_key} template variable substitutes actual asset name (e.g., "blue", "ANG.txt", etc.)
+        assets.*.alternate: "assets.{asset_key}.alternates"
         
-        assets.cirrus.alternate: "assets.cirrus.alternates"
-        assets.cirrus.href: "assets.cirrus.alternates.ipfs.href"
-        assets.cirrus.type: "assets.cirrus.alternates.ipfs.type"
+        # For ALL assets: update href to IPFS URL
+        assets.*.href: "assets.{asset_key}.alternates.ipfs.href"
         
-        assets.coastal.alternate: "assets.coastal.alternates"
-        assets.coastal.href: "assets.coastal.alternates.ipfs.href"
-        assets.coastal.type: "assets.coastal.alternates.ipfs.type"
-        
-        assets.green.alternate: "assets.green.alternates"
-        assets.green.href: "assets.green.alternates.ipfs.href"
-        assets.green.type: "assets.green.alternates.ipfs.type"
-        
-        assets.lwir11.alternate: "assets.lwir11.alternates"
-        assets.lwir11.href: "assets.lwir11.alternates.ipfs.href"
-        assets.lwir11.type: "assets.lwir11.alternates.ipfs.type"
-        
-        assets.lwir12.alternate: "assets.lwir12.alternates"
-        assets.lwir12.href: "assets.lwir12.alternates.ipfs.href"
-        assets.lwir12.type: "assets.lwir12.alternates.ipfs.type"
-        
-        assets.nir08.alternate: "assets.nir08.alternates"
-        assets.nir08.href: "assets.nir08.alternates.ipfs.href"
-        assets.nir08.type: "assets.nir08.alternates.ipfs.type"
-        
-        assets.pan.alternate: "assets.pan.alternates"
-        assets.pan.href: "assets.pan.alternates.ipfs.href"
-        assets.pan.type: "assets.pan.alternates.ipfs.type"
-        
-        assets.qa_pixel.alternate: "assets.qa_pixel.alternates"
-        assets.qa_pixel.href: "assets.qa_pixel.alternates.ipfs.href"
-        assets.qa_pixel.type: "assets.qa_pixel.alternates.ipfs.type"
-        
-        assets.qa_radsat.alternate: "assets.qa_radsat.alternates"
-        assets.qa_radsat.href: "assets.qa_radsat.alternates.ipfs.href"
-        assets.qa_radsat.type: "assets.qa_radsat.alternates.ipfs.type"
-        
-        assets.red.alternate: "assets.red.alternates"
-        assets.red.href: "assets.red.alternates.ipfs.href"
-        assets.red.type: "assets.red.alternates.ipfs.type"
-        
-        assets.SAA.alternate: "assets.SAA.alternates"
-        assets.SAA.href: "assets.SAA.alternates.ipfs.href"
-        assets.SAA.type: "assets.SAA.alternates.ipfs.type"
-        
-        assets.swir16.alternate: "assets.swir16.alternates"
-        assets.swir16.href: "assets.swir16.alternates.ipfs.href"
-        assets.swir16.type: "assets.swir16.alternates.ipfs.type"
-        
-        assets.swir22.alternate: "assets.swir22.alternates"
-        assets.swir22.href: "assets.swir22.alternates.ipfs.href"
-        assets.swir22.type: "assets.swir22.alternates.ipfs.type"
-        
-        assets.SZA.alternate: "assets.SZA.alternates"
-        assets.SZA.href: "assets.SZA.alternates.ipfs.href"
-        assets.SZA.type: "assets.SZA.alternates.ipfs.type"
-        
-        assets.VAA.alternate: "assets.VAA.alternates"
-        assets.VAA.href: "assets.VAA.alternates.ipfs.href"
-        assets.VAA.type: "assets.VAA.alternates.ipfs.type"
-        
-        assets.VZA.alternate: "assets.VZA.alternates"
-        assets.VZA.href: "assets.VZA.alternates.ipfs.href"
-        assets.VZA.type: "assets.VZA.alternates.ipfs.type"
-        
-        # Metadata Assets (keys with dots need quoting in JMESPath source)
-        'assets."ANG.txt".alternate': "assets.\"ANG.txt\".alternates"
-        'assets."ANG.txt".href': "assets.\"ANG.txt\".alternates.ipfs.href"
-        'assets."ANG.txt".type': "assets.\"ANG.txt\".alternates.ipfs.type"
-        
-        'assets."MTL.json".alternate': "assets.\"MTL.json\".alternates"
-        'assets."MTL.json".href': "assets.\"MTL.json\".alternates.ipfs.href"
-        'assets."MTL.json".type': "assets.\"MTL.json\".alternates.ipfs.type"
-        
-        'assets."MTL.txt".alternate': "assets.\"MTL.txt\".alternates"
-        'assets."MTL.txt".href': "assets.\"MTL.txt\".alternates.ipfs.href"
-        'assets."MTL.txt".type': "assets.\"MTL.txt\".alternates.ipfs.type"
-        
-        'assets."MTL.xml".alternate': "assets.\"MTL.xml\".alternates"
-        'assets."MTL.xml".href': "assets.\"MTL.xml\".alternates.ipfs.href"
-        'assets."MTL.xml".type': "assets.\"MTL.xml\".alternates.ipfs.type"
-        
-        # Browse/Index Assets
-        assets.index.alternate: "assets.index.alternates"
-        assets.index.href: "assets.index.alternates.ipfs.href"
-        assets.index.type: "assets.index.alternates.ipfs.type"
-        
-        assets.reduced_resolution_browse.alternate: "assets.reduced_resolution_browse.alternates"
-        assets.reduced_resolution_browse.href: "assets.reduced_resolution_browse.alternates.ipfs.href"
-        assets.reduced_resolution_browse.type: "assets.reduced_resolution_browse.alternates.ipfs.type"
-        
-        assets.thumbnail.alternate: "assets.thumbnail.alternates"
-        assets.thumbnail.href: "assets.thumbnail.alternates.ipfs.href"
-        assets.thumbnail.type: "assets.thumbnail.alternates.ipfs.type"
+        # For ALL assets: update type to match IPFS format
+        assets.*.type: "assets.{asset_key}.alternates.ipfs.type"
 
   # ============================================================================
   # STEP 6: Update - Set final defaults and timestamps
