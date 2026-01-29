@@ -158,9 +158,8 @@ Bundlers **MUST** implement buffering and non-blocking I/O.
 
 Data transfer objects used in the pipeline are defined centrally in [Data Contracts](./05-data-contracts.md).
 
-### 4.1 TransformedItem
-
-See [Data Contracts - Intermediate Data Schema](./05-data-contracts.md#3-intermediate-data-schema).
+### 4.1 Use of Dicts
+All modules communicate using the standard Python `dict` as the primary data structure, aligning with the "Wire Format" definition in Data Contracts.
 
 ### 4.2 OutputResult
 

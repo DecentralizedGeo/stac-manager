@@ -23,7 +23,6 @@ A standard `pystac.Item` is significantly heavier than its JSON representation d
 
 -   **Raw JSON**: ~2-5 KB
 -   **pystac.Item (in-memory)**: ~30-50 KB (depending on link count)
--   **TransformedItem (TypedDict)**: ~10-15 KB
 
 **Implication**:
 -   **100k Items in List**: ~5 GB RAM (Danger Zone)
@@ -101,7 +100,7 @@ This turns O(N) RAM usage into O(1) RAM usage, effectively effectively utilizing
 
 ### 4.2 TransformModule (Processor)
 -   **Strategy**: Semaphore-controlled Concurrency.
--   **Data Structure**: Convert `pystac.Item` to `TransformedItem` (dict) ASAP if the transformation logic allows, to reduce overhead.
+-   **Data Structure**: Operate on standard dictionary structures to avoid `pystac.Item` overhead where possible.
 -   **Link Management**: Explicitly `item.clear_links()` if retaining the item object generally, though ideally we simply drop the reference.
 
 ### 4.3 OutputModule (Consumer)

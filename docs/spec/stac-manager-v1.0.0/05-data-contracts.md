@@ -162,26 +162,7 @@ class FailureCollector:
 
 ## 3. Intermediate Data Schema
 
-The contract for `TransformModule`.
-
-```python
-from typing import TypedDict, Any
-
-class TransformedItem(TypedDict, total=False):
-    """
-    Standardized dictionary output from TransformModule.
-    Does not strictly require valid STAC fields yet, but MUST possess structure.
-    """
-    id: str                             # Required: Item identifier
-    geometry: dict | None               # GeoJSON geometry or None
-    bbox: list[float] | None            # Bounding box [minx, miny, maxx, maxy]
-    datetime: str | None                # ISO 8601 datetime string
-    properties: dict[str, Any]          # Additional properties
-    assets: dict[str, dict]             # Asset definitions (key -> asset dict)
-    links: list[dict] | None            # Optional link objects
-```
-
-**Usage**: See [Protocols](./06-protocols.md#31-transformeditem) for full specification.
+Intermediate data in the pipeline follows the standard **STAC Item** structure (as a `dict`). All modules operate directly on these dictionaries when processing items.
 
 ---
 
@@ -343,7 +324,7 @@ This document defines:
 
 1. **Streaming Requirement**: Use `AsyncIterator` not `list` for items
 2. **Wire Format**: Strict `dict` usage for inter-module communication
-3. **TransformedItem**: Contract for Transform module
+3. **Intermediate Data**: Standard STAC Item `dict` structure used throughout
 4. **Failure Report**: Complete schema for error tracking
 5. **Query Language**: JMESPath for field mapping
 6. **OutputResult**: Return type for OutputModule.finalize()
