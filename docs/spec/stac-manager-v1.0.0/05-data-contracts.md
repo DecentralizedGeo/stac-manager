@@ -245,19 +245,18 @@ The `context` field may contain step-specific debugging information:
 
 ## 5. Query Language Standard
 
-For all configuration fields involving field selection or mapping (e.g., `TransformModule` schemas, filtering logic):
+For all configuration fields involving field selection or mapping (e.g., `TransformModule` field mapping, filtering logic):
 
 - **Standard**: [JMESPath](https://jmespath.org/)
 - **Library**: `jmespath` (Python)
 - **Rationale**: Standard, robust, security-safe (no `eval`)
 
-**Example**: Transform schema using JMESPath  
+**Example**: Transform field mapping using JMESPath  
 
 ```yaml
-mappings:
-  - source_field: "metadata.acquisition.datetime"
-    target_field: "properties.datetime"
-    type: datetime
+field_mapping:
+  properties.datetime: "metadata.acquisition.datetime"
+  properties.platform: "platform_info.name"
 ```
 
 ---

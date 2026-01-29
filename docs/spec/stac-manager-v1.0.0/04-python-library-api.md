@@ -100,7 +100,10 @@ async def custom_pipeline():
     # 2. Sequential Processing
     async for item_dict in item_stream:
         # Transform Modifier (Sync)
-        transform = TransformModule({"schema": ...})
+        transform = TransformModule({
+            "input_file": "./input.json",
+            "field_mapping": {"properties.new_field": "source_field"}
+        })
         item_dict = transform.modify(item_dict, ctx)
         
         # Output Bundler (Sync)
