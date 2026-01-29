@@ -117,6 +117,7 @@ def generate_input_data(items: List[Dict]) -> Dict[str, Dict]:
     """Generate input data from STAC items.
     
     Extracts cloud cover and snow cover properties for use in tutorials.
+    These files are used by TransformModule for data enrichment (supports both JSON and CSV).
     
     Args:
         items: List of STAC item dictionaries
