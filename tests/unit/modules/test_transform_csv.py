@@ -33,8 +33,8 @@ def test_transform_csv_inference_and_id_safety():
         })
         
         # Test ID indexing (should find "007" as string)
-        assert "007" in module.sidecar_index
-        entry = module.sidecar_index["007"]
+        assert "007" in module.input_index
+        entry = module.input_index["007"]
         
         # Verify type inference
         # cloud_cover should be float

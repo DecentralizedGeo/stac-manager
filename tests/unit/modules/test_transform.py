@@ -23,8 +23,8 @@ def test_transform_module_loads_json_input():
             "field_mapping": {"properties.custom": "custom_field"}
         })
         
-        assert module.sidecar_index is not None
-        assert "item-001" in module.sidecar_index
+        assert module.input_index is not None
+        assert "item-001" in module.input_index
     finally:
         if os.path.exists(temp_path):
             os.unlink(temp_path)
@@ -47,8 +47,8 @@ def test_transform_module_indexes_dict_input():
             "field_mapping": {"properties.custom": "custom_field"}
         })
         
-        assert "item-001" in module.sidecar_index
-        assert module.sidecar_index["item-001"]["custom_field"] == "value1"
+        assert "item-001" in module.input_index
+        assert module.input_index["item-001"]["custom_field"] == "value1"
     finally:
         if os.path.exists(temp_path):
             os.unlink(temp_path)
@@ -71,8 +71,8 @@ def test_transform_module_indexes_list_input():
             "field_mapping": {"properties.custom": "custom_field"}
         })
         
-        assert "item-001" in module.sidecar_index
-        assert module.sidecar_index["item-001"]["custom_field"] == "value1"
+        assert "item-001" in module.input_index
+        assert module.input_index["item-001"]["custom_field"] == "value1"
     finally:
         if os.path.exists(temp_path):
             os.unlink(temp_path)
@@ -218,7 +218,7 @@ def test_transform_module_missing_item_handling():
         # Check if warning was collected
         failures = context.failure_collector.get_all()
         assert len(failures) > 0
-        assert "Missing sidecar data" in failures[0].message
+        assert "Missing input data" in failures[0].message
     finally:
         if os.path.exists(temp_path):
             os.unlink(temp_path)
