@@ -49,7 +49,12 @@ def parse_field_path(path: str) -> list[str]:
     return keys
 
 
-def set_nested_field(item: dict, path: str | list[str] | tuple[str, ...], value: Any) -> None:
+def set_nested_field(
+    item: dict, 
+    path: str | list[str] | tuple[str, ...], 
+    value: Any,
+    create_missing: bool = True
+) -> None:
     """
     Set nested field using dot notation or list of keys.
     Creates intermediate dicts as needed.
@@ -58,6 +63,8 @@ def set_nested_field(item: dict, path: str | list[str] | tuple[str, ...], value:
         item: STAC item dict (modified in-place)
         path: Path as dot-separated string or list/tuple of keys
         value: Value to set
+        create_missing: If True (default), create intermediate dicts. 
+                       If False, raise DataProcessingError if path missing.
     """
     if isinstance(path, str):
         keys = parse_field_path(path)
@@ -66,9 +73,18 @@ def set_nested_field(item: dict, path: str | list[str] | tuple[str, ...], value:
         
     current = item
     
-    for key in keys[:-1]:
+    for i, key in enumerate(keys[:-1]):
         if key not in current:
+            if not create_missing:
+                # Use a safe Join for error reporting
+                path_str = ".".join(str(k) for k in keys[:i+1])
+                raise DataProcessingError(f"Path does not exist: {path_str}")
             current[key] = {}
+        
+        if not isinstance(current[key], dict):
+             path_str = ".".join(str(k) for k in keys[:i+1])
+             raise DataProcessingError(f"Cannot traverse non-dict at: {path_str}")
+             
         current = current[key]
     
     current[keys[-1]] = value

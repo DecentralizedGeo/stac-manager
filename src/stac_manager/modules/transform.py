@@ -15,7 +15,7 @@ except ImportError:
 from stac_manager.modules.config import TransformConfig
 from stac_manager.core.context import WorkflowContext
 from stac_manager.exceptions import ConfigurationError, DataProcessingError
-from stac_manager.utils.field_ops import set_nested_field
+from stac_manager.utils.field_ops import expand_wildcard_paths, set_nested_field
 
 logger = logging.getLogger(__name__)
 
@@ -106,9 +106,7 @@ class TransformModule:
 
         Supports wildcard patterns like `assets.*` and template variables
         like `{item_id}`, `{collection_id}`, `{asset_key}` in field mapping.
-        """
-        from stac_manager.utils.field_ops import expand_wildcard_paths, set_nested_field,get_nested_field
-        
+        """        
         item_id = item.get("id")
         if not item_id or item_id not in self.input_index:
             if self.config.handle_missing == 'warn':

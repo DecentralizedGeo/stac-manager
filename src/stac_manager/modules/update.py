@@ -87,11 +87,11 @@ class UpdateModule:
             
             # Apply each expanded update
             for field_path, value in expanded_updates.items():
-                set_field_with_path_creation(
+                set_nested_field(
                     item,
                     field_path,
                     value,
-                    create_paths=self.config.create_missing_paths
+                    create_missing=self.config.create_missing_paths
                 )
 
         # 3. Apply item-specific patches
@@ -110,11 +110,11 @@ class UpdateModule:
         # 4. Auto-update timestamp
         if self.config.auto_update_timestamp:
             now = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
-            set_field_with_path_creation(
+            set_nested_field(
                 item,
                 "properties.updated",
                 now,
-                create_paths=True
+                create_missing=True
             )
         
         return item
