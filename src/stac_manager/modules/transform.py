@@ -140,7 +140,14 @@ class TransformModule:
         if self.config.strategy == 'update_existing':
             # Only apply mappings where target path exists in item
             # Use tuple keys to check existence (handles keys with colons correctly)
-            _MISSING = object()  # Sentinel value
+            
+            # Sentinel value pattern: We need to distinguish between:
+            # 1. Field doesn't exist → get_nested_field returns default
+            # 2. Field exists with None value → get_nested_field returns None
+            # Using a unique object() as default lets us detect case #1 with identity check (is)
+            # because object() creates a unique instance that can ONLY match via 'is', not '=='
+            _MISSING = object()  # Sentinel: guaranteed unique, won't match any real data
+            
             final_mapping = {}
             for key_tuple, source_query in expanded_tuples.items():
                 # Check if field exists using sentinel
