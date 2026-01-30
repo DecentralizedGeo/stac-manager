@@ -15,7 +15,7 @@ except ImportError:
 from stac_manager.modules.config import TransformConfig
 from stac_manager.core.context import WorkflowContext
 from stac_manager.exceptions import ConfigurationError, DataProcessingError
-from stac_manager.utils.field_ops import expand_wildcard_paths, set_nested_field
+from stac_manager.utils.field_ops import expand_wildcard_paths, set_nested_field, get_nested_field
 
 logger = logging.getLogger(__name__)
 
