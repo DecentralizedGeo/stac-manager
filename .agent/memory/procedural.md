@@ -45,6 +45,57 @@
 - Update semantic.md with new architectural concepts
 - Focus on 1-3 critical insights (not comprehensive log)
 
+### Tool Limitation Handling
+**When File Editing Tools Fail**:
+- **3-Strike Rule**: If tool fails 3 times on same operation, switch strategy
+- **Strategy Pivot**: Tests-first → Implementation-first, or vice versa
+- **Pattern**: Don't force a tool that's struggling - adapt your approach
+- **Example**: `multi_replace_file_content` struggled adding new test functions → switched to implementing logging first, tests second
+- **Benefit**: Maintains forward momentum rather than getting blocked
+
+## Logger Injection Pattern (v1.1.0)
+
+### Module Implementation
+**Standard Pattern for All Modules**:
+```python
+class Module:
+    def __init__(self, config: dict):
+        self.config = ModuleConfig(**config)
+        self.logger = logging.getLogger(__name__)  # Default logger
+        # ... other initialization
+    
+    def set_logger(self, logger: logging.Logger) -> None:
+        """Set step-specific logger for this module.
+        
+        Args:
+            logger: Logger instance to use for this module
+        """
+        self.logger = logger
+```
+
+### Why Default Logger
+- **Safety**: Prevents crashes if `set_logger()` not called
+- **Testing**: Enables module testing without explicit logger injection
+- **Flexibility**: Modules work standalone or in orchestrated workflows
+
+### Message Format Standards
+- **Structure**: `{action} | key: value | key: value`
+- **Separator**: Pipe `|` with spaces for visual clarity
+- **Context**: Always include `item: {item_id}` for item operations
+- **Examples**:
+  - INFO: `"Starting ingest | mode: api | source: microsoft/planetary-computer"`
+  - INFO: `"Enriched item | item: LC09_... | fields_mapped: 24 | strategy: update_existing"`
+  - DEBUG: `"Mapped field | target: properties.cloud_cover | source: cloud_cover"`
+  - WARNING: `"Validation failed | item: test-123 | errors: Missing required field"`
+
+### Logging Levels (Operational Guidance)
+- **INFO**: Start/completion summaries, counts, status changes
+- **DEBUG**: Per-item details, per-field operations, match details
+- **WARNING**: Recoverable errors, validation failures (permissive mode)
+- **ERROR**: Critical failures (strict mode only)
+
+
+
 ## Development Workflow
 - **Spec-First**: Always read `docs/spec/` before proposing designs.
 - **TDD Pattern**: 
