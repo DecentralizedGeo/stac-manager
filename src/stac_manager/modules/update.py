@@ -54,7 +54,10 @@ class UpdateModule:
         Returns:
             Modified item dict
         """
-        context.logger.debug(f"Modifying item {item.get('id', 'unknown')}")
+        item_id = item.get('id', 'unknown')
+        changes = []  # Track changes for summary logging
+        
+        self.logger.debug(f"Processing item | item: {item_id}")
 
         # 1. Apply strict removals (Global) - with wildcard expansion
         if self.config.removes:
@@ -76,9 +79,18 @@ class UpdateModule:
                 else:
                     if path_tuple[-1] in target:
                         del target[path_tuple[-1]]
-                        context.logger.debug(
-                            f"Removed field {'.'.join(path_tuple)} from {item.get('id')}"
+                        path_str = '.'.join(path_tuple)
+                        self.logger.debug(
+                            f"Removed field | item: {item_id} | path: {path_str}"
                         )
+                        changes.append(f"remove {path_str}")
+            
+            # Log INFO summary if fields were removed
+            if expanded_paths:
+                self.logger.info(
+                    f"Removed fields | item: {item_id} | count: {len(expanded_paths)} | "
+                    f"patterns: {self.config.removes}"
+                )
         
         # 2. Apply global field updates (with wildcard expansion)
         if self.config.updates:
@@ -92,30 +104,42 @@ class UpdateModule:
                 }
             )
             
-            if expanded_updates:
-                context.logger.debug(f"Applying updates to fields {list(expanded_updates.keys())} for {item.get('id')}")
-            
             # Apply each expanded update
             for field_path, value in expanded_updates.items():
+                # Log detailed change at DEBUG level
+                self.logger.debug(
+                    f"Set field | item: {item_id} | path: {field_path} | value: {value}"
+                )
+                
                 set_nested_field(
                     item,
                     field_path,
                     value,
                     create_missing=self.config.create_missing_paths
                 )
+                changes.append(f"set {field_path}")
 
         # 3. Apply item-specific patches
         if self.patches:
             item_id = item.get("id")
             if item_id and item_id in self.patches:
                 patch_data = self.patches[item_id]
-                context.logger.debug(f"Applying patch to {item_id}")
+                
+                self.logger.debug(
+                    f"Applying patch | item: {item_id} | mode: {self.config.mode}"
+                )
                 
                 if self.config.mode == 'replace':
                     item = patch_data
+                    changes.append("apply patch (replace)")
                 else:  # merge or update_only
                     strategy = 'update_only' if self.config.mode == 'update_only' else 'overwrite'
                     item = deep_merge(item, patch_data, strategy=strategy)
+                    changes.append(f"apply patch ({strategy})")
+                
+                self.logger.info(
+                    f"Applied patch | item: {item_id} | mode: {self.config.mode}"
+                )
 
         # 4. Auto-update timestamp
         if self.config.auto_update_timestamp:
@@ -125,6 +149,16 @@ class UpdateModule:
                 "properties.updated",
                 now,
                 create_missing=True
+            )
+            self.logger.debug(
+                f"Updated timestamp | item: {item_id} | timestamp: {now}"
+            )
+            changes.append("update timestamp")
+        
+        # Summary log at INFO level
+        if changes:
+            self.logger.info(
+                f"Applied updates | item: {item_id} | changes: {len(changes)}"
             )
         
         return item
