@@ -1,4 +1,5 @@
 """Validate Module - STAC schema validation."""
+import logging
 from stac_manager.modules.config import ValidateConfig
 from stac_manager.core.context import WorkflowContext
 from stac_manager.exceptions import DataProcessingError
@@ -11,8 +12,17 @@ class ValidateModule:
     def __init__(self, config: dict) -> None:
         """Initialize with configuration."""
         self.config = ValidateConfig(**config)
+        self.logger = logging.getLogger(__name__)  # Default logger
         # Initialize validator once
         self.validator = stac_validator.StacValidate()
+    
+    def set_logger(self, logger: logging.Logger) -> None:
+        """Set step-specific logger for this module.
+        
+        Args:
+            logger: Logger instance to use for this module
+        """
+        self.logger = logger
     
     def modify(self, item: dict, context: WorkflowContext) -> dict | None:
         """

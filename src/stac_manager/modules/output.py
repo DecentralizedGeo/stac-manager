@@ -68,6 +68,7 @@ See Also:
     - Bundler: Protocol interface implemented by this module
 """
 import json
+import logging
 import asyncio
 from pathlib import Path
 from typing import Optional
@@ -136,10 +137,19 @@ class OutputModule:
             ValidationError: If config doesn't match OutputConfig schema
         """
         self.config = OutputConfig(**config)
+        self.logger = logging.getLogger(__name__)  # Default logger
         self.buffer: list[dict] = []
         self.items_written = 0
         self.collection_id: Optional[str] = None
         self.collection_created = False
+
+    def set_logger(self, logger: logging.Logger) -> None:
+        """Set step-specific logger for this module.
+
+        Args:
+            logger: Logger instance to use for this module
+        """
+        self.logger = logger
 
     async def bundle(self, item: dict, context: WorkflowContext) -> None:
         """Accept a single item for bundling/output.

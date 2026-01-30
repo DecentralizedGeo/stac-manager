@@ -1,4 +1,5 @@
 """Extension Module - STAC extension scaffolding."""
+import logging
 import requests
 import pystac
 from pystac import EXTENSION_HOOKS
@@ -15,6 +16,7 @@ class ExtensionModule:
     def __init__(self, config: dict) -> None:
         """Initialize and fetch schema."""
         self.config = ExtensionConfig(**config)
+        self.logger = logging.getLogger(__name__)  # Default logger
         self.is_registered = False
         
         # Check if extension is registered with pystac
@@ -54,6 +56,14 @@ class ExtensionModule:
                 else:
                     nested_defaults = non_wildcard_defaults
                 self.template = deep_merge(self.template, nested_defaults, strategy='overwrite')
+    
+    def set_logger(self, logger: logging.Logger) -> None:
+        """Set step-specific logger for this module.
+        
+        Args:
+            logger: Logger instance to use for this module
+        """
+        self.logger = logger
     
     def _resolve_ref(self, ref: str, schema: dict) -> dict:
         """
