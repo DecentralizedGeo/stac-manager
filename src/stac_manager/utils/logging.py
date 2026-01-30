@@ -146,7 +146,8 @@ def setup_logger(config: dict) -> logging.Logger:
         datefmt='%H:%M:%S'
     )
     ch = logging.StreamHandler(sys.stdout)
-    ch.setLevel(level)
+    # Set handler to DEBUG to allow all permitted records (filtering done by Loggers)
+    ch.setLevel(logging.DEBUG)
     ch.addFilter(path_filter)
     ch.setFormatter(console_formatter)
     logger.addHandler(ch)
@@ -185,7 +186,8 @@ def setup_logger(config: dict) -> logging.Logger:
             )
             fh.setFormatter(file_text_formatter)
             
-        fh.setLevel(level)
+        # Set handler to DEBUG to allow all permitted records
+        fh.setLevel(logging.DEBUG)
         fh.addFilter(path_filter)
         logger.addHandler(fh)
     except Exception as e:
