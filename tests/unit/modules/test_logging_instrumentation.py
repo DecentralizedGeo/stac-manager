@@ -204,7 +204,6 @@ async def test_transform_module_logs_enrichment():
     """Test that TransformModule logs enrichment details."""
     mock_logger = MagicMock(spec=logging.Logger)
     context = MockWorkflowContext.create()
-    context.logger = mock_logger
     
     config = {
         "input_file": "sidecar.csv", # Mocked
@@ -219,6 +218,7 @@ async def test_transform_module_logs_enrichment():
         
         with patch('pathlib.Path.exists', return_value=True):
             module = TransformModule(config)
+            module.set_logger(mock_logger)  # Inject logger
             # Manually set index after init
             module.input_index = {"test-item": {"data_column": "enriched"}}
             
@@ -226,11 +226,14 @@ async def test_transform_module_logs_enrichment():
             item = {"id": "test-item", "properties": {}}
             module.modify(item, context)
             
-            # Verify logs
-            # Expecting DEBUG log about enrichment
-            debug_calls = [args[0] for args, _ in mock_logger.debug.call_args_list]
+            # Verify INFO logs
+            info_calls = [str(args[0]) for args, _ in mock_logger.info.call_args_list]
+            assert any("Enriched item" in call and "test-item" in call for call in info_calls), \
+                f"Expected 'Enriched item' with item ID in INFO logs, got: {info_calls}"
+            
+            # Verify DEBUG logs
+            debug_calls = [str(args[0]) for args, _ in mock_logger.debug.call_args_list]
             assert any("test-item" in str(call) for call in debug_calls)
-            assert any("Enriching" in str(call) or "input" in str(call) for call in debug_calls)
 
 @pytest.mark.asyncio
 async def test_transform_module_accepts_injected_logger():

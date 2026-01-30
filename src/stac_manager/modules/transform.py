@@ -116,11 +116,16 @@ class TransformModule:
         Supports wildcard patterns like `assets.*` and template variables
         like `{item_id}`, `{collection_id}`, `{asset_key}` in field mapping.
         """        
-        item_id = item.get("id")
+        item_id = item.get("id", "unknown")
+        
+        # DEBUG: Processing item
+        self.logger.debug(f"Processing item | item: {item_id}")
+        
         if not item_id or item_id not in self.input_index:
             if self.config.handle_missing == 'warn':
+                self.logger.warning(f"No match found | item: {item_id}")
                 context.failure_collector.add(
-                    item_id=item_id or "unknown",
+                    item_id=item_id,
                     error="Missing input data",
                     step_id=context.workflow_id
                 )
@@ -129,7 +134,9 @@ class TransformModule:
             return item
             
         input_entry = self.input_index[item_id]
-        context.logger.debug(f"Enriching item {item_id} from input data")
+        
+        # DEBUG: Match found
+        self.logger.debug(f"Matched input data | item: {item_id}")
         
         # Expand wildcards in field_mapping
         context_dict = {
@@ -170,6 +177,7 @@ class TransformModule:
                 final_mapping[key_tuple] = source_query
         
         # Apply field mapping
+        mapped_count = 0
         for target_field, source_query in final_mapping.items():
             value = self._extract_value(input_entry, source_query)
             
@@ -177,7 +185,15 @@ class TransformModule:
             # Unless we want explicit nulls? Defaulting to skip for now.
             if value is not None:
                 set_nested_field(item, target_field, value)
-                context.logger.debug(f"Mapped {source_query} -> {target_field}")
+                mapped_count += 1
+                # DEBUG: Individual field mapping
+                self.logger.debug(f"Mapped field | target: {target_field} | source: {source_query}")
+        
+        # INFO: Enrichment complete
+        self.logger.info(
+            f"Enriched item | item: {item_id} | fields_mapped: {mapped_count} | "
+            f"strategy: {self.config.strategy}"
+        )
         
         return item
         
