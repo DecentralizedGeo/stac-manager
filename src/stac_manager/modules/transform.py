@@ -26,6 +26,7 @@ class TransformModule:
     def __init__(self, config: dict) -> None:
         """Initialize and load input file."""
         self.config = TransformConfig(**config)
+        self.logger = logging.getLogger(__name__)  # Default logger
         self.input_index: dict[str, dict] = {}
         
         file_path = Path(self.config.input_file)
@@ -91,8 +92,16 @@ class TransformModule:
                 if item_id is not None:
                     self.input_index[str(item_id)] = entry
         else:
-            raise ConfigurationError("input_file content must be dict or list (after data_path)")
-
+            raise ConfigurationError(f"input_file must be dict or list, got {type(records)}")
+    
+    def set_logger(self, logger: logging.Logger) -> None:
+        """Set step-specific logger for this module.
+        
+        Args:
+            logger: Logger instance to use for this module
+        """
+        self.logger = logger
+    
     def modify(self, item: dict, context: WorkflowContext) -> dict:
         """
         Enrich STAC item with input data.

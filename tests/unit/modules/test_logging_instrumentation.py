@@ -233,6 +233,31 @@ async def test_transform_module_logs_enrichment():
             assert any("Enriching" in str(call) or "input" in str(call) for call in debug_calls)
 
 @pytest.mark.asyncio
+async def test_transform_module_accepts_injected_logger():
+    """Test TransformModule has set_logger method and uses it."""
+    mock_logger = MagicMock(spec=logging.Logger)
+    
+    config = {
+        "input_file": "test.csv",
+        "input_join_key": "id",
+        "field_mapping": {"properties.test": "value"}
+    }
+    
+    with patch('pathlib.Path.exists', return_value=True), \
+         patch('stac_manager.modules.transform.TransformModule._load_csv'):
+        from stac_manager.modules.transform import TransformModule
+        module = TransformModule(config)
+        
+        # Module should have set_logger method
+        assert hasattr(module, 'set_logger'), "TransformModule missing set_logger method"
+        
+        # Inject logger
+        module.set_logger(mock_logger)
+        
+        # Verify logger was set
+        assert module.logger is mock_logger
+
+@pytest.mark.asyncio
 async def test_output_module_logs_writes(tmp_path):
     """Test that OutputModule logs file writing."""
     mock_logger = MagicMock(spec=logging.Logger)
