@@ -26,8 +26,8 @@ settings:
     
     # Log Rotation Settings
     file: logs/stac_manager.log
-    max_bytes: 10485760  # 10MB (Default)
-    backup_count: 5      # Keep 5 backup files (Default)
+    file_size: 10         # Size in MB (Default: 10)
+    backup_count: 5       # Keep 5 backup files (Default)
 steps:
   ...
 ```
