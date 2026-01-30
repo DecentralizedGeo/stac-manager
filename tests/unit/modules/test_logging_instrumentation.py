@@ -143,6 +143,40 @@ async def test_ingest_module_accepts_injected_logger():
         assert module.logger is mock_logger
 
 @pytest.mark.asyncio
+async def test_ingest_module_logs_info_messages():
+    """Test IngestModule logs INFO-level summaries."""
+    mock_logger = MagicMock(spec=logging.Logger)
+    context = MockWorkflowContext.create()
+    
+    config = {"mode": "file", "source": "items.json", "format": "json"}
+    
+    with patch('stac_manager.modules.ingest.IngestModule._load_json_file') as mock_load:
+        async def async_gen(_):
+            yield {"id": "item-1"}
+            yield {"id": "item-2"}
+        mock_load.return_value = async_gen(None)
+        
+        with patch('pathlib.Path.exists', return_value=True), \
+             patch('pathlib.Path.is_file', return_value=True), \
+             patch('pathlib.Path.is_dir', return_value=False):
+            module = IngestModule(config)
+            module.set_logger(mock_logger)
+            
+            # Fetch items
+            items = [item async for item in module.fetch(context)]
+            
+            # Verify INFO logs
+            info_calls = [str(args[0]) for args, _ in mock_logger.info.call_args_list]
+            
+            # Should log start of ingest
+            assert any("Starting ingest" in call for call in info_calls), \
+                f"Expected 'Starting ingest' in INFO logs, got: {info_calls}"
+            
+            # Should log completion with count
+            assert any("Ingest complete" in call and "total_items: 2" in call for call in info_calls), \
+                f"Expected 'Ingest complete | total_items: 2' in INFO logs, got: {info_calls}"
+
+@pytest.mark.asyncio
 async def test_transform_module_logs_enrichment():
     """Test that TransformModule logs enrichment details."""
     mock_logger = MagicMock(spec=logging.Logger)
