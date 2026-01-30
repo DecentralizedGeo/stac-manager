@@ -194,11 +194,15 @@ class IngestModule:
         count = 0
         if self.config.mode == "file":
             async for item in self._fetch_from_file():
+                if item is None:
+                    continue
                 context.logger.debug(f"Fetched item {item.get('id', 'unknown')}")
                 yield item
                 count += 1
         else:
             async for item in self._fetch_from_api(context):
+                if item is None:
+                    continue
                 context.logger.debug(f"Fetched item {item.get('id', 'unknown')}")
                 yield item
                 count += 1

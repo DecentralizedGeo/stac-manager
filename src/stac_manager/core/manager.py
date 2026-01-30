@@ -415,16 +415,18 @@ class StacManager:
     ):
         """Wrap sync modifier in async generator."""
         async for item in stream:
+            if item is None:
+                continue
             try:
                 result = modifier.modify(item, context)
                 if result:
                     yield result
             except Exception as e:
                 self.logger.warning(
-                    f"Modifier '{step_id}' failed for item {item.get('id', 'unknown')}: {e}"
+                    f"Modifier '{step_id}' failed for item {item.get('id', 'unknown') if item else 'unknown'}: {e}"
                 )
                 context.failure_collector.add(
-                    item_id=item.get('id', 'unknown'),
+                    item_id=item.get('id', 'unknown') if item else 'unknown',
                     error=e,
                     step_id=step_id
                 )
@@ -440,6 +442,8 @@ class StacManager:
         count = 0
         
         async for item in stream:
+            if item is None:
+                continue
             try:
                 await bundler.bundle(item, context)
                 count += 1

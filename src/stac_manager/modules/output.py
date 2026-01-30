@@ -168,6 +168,13 @@ class OutputModule:
 
                 # Buffer automatically flushes at buffer_size
         """
+        if item is None:
+            return
+
+        if not isinstance(item, dict):
+            context.logger.error(f"OutputModule received invalid item type: {type(item)}")
+            return
+
         # Extract collection_id from first item or context
         if self.collection_id is None:
             self.collection_id = item.get("collection") or context.data.get("collection_id", "default")
