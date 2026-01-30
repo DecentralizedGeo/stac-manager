@@ -105,9 +105,16 @@ class StacManager:
         self.checkpoint_dir = checkpoint_dir or Path('./checkpoints')
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
         
-        # Setup logging
+        # Setup logging - prefer workflow config over CLI parameter
         self.logger = logging.getLogger(f"stac_manager.{self.workflow.name}")
-        self.logger.setLevel(getattr(logging, log_level.upper()))
+        
+        # Use log level from workflow settings if available, otherwise use parameter
+        if self.workflow.settings and 'logging' in self.workflow.settings:
+            workflow_log_level = self.workflow.settings['logging'].get('level', log_level)
+        else:
+            workflow_log_level = log_level
+            
+        self.logger.setLevel(getattr(logging, workflow_log_level.upper()))
         
         # Build execution order (validates DAG, detects cycles)
         self._execution_order = build_execution_order(self.workflow.steps)
@@ -124,6 +131,9 @@ class StacManager:
         
         Matrix context data from context.data is merged into step configs,
         allowing matrix entries to override or extend step configuration.
+        
+        Creates step-specific loggers for each module and injects them if the
+        module supports the set_logger() method.
         
         Args:
             context: Workflow execution context (contains matrix data in context.data)
@@ -147,6 +157,35 @@ class StacManager:
                 
                 # Instantiate with merged config
                 module_instance = module_class(config=merged_config)
+                
+                # Create and inject step-specific logger
+                step_logger = logging.getLogger(f"{self.logger.name}.{step.id}")
+                
+                # Set step-specific log level if configured, otherwise inherit from parent
+                if step.log_level:
+                    try:
+                        level = getattr(logging, step.log_level.upper())
+                        step_logger.setLevel(level)
+                        self.logger.debug(
+                            f"Set log level for step '{step.id}' to {step.log_level.upper()}"
+                        )
+                    except AttributeError:
+                        self.logger.warning(
+                            f"Invalid log level '{step.log_level}' for step '{step.id}', using default"
+                        )
+                else:
+                    # Inherit the global logger's level
+                    step_logger.setLevel(self.logger.level)
+                    self.logger.info(
+                        f"Step '{step.id}' logger level set to {logging.getLevelName(self.logger.level)} (inherited from global)"
+                    )
+                
+                # Inject logger into module if it supports it
+                if hasattr(module_instance, 'set_logger'):
+                    module_instance.set_logger(step_logger)
+                    self.logger.debug(
+                        f"Injected logger for step '{step.id}' into {step.module}"
+                    )
                 
                 modules[step.id] = module_instance
                 

@@ -1,5 +1,6 @@
 from typing import Any
 import json
+import logging
 from pathlib import Path
 from stac_manager.modules.config import UpdateConfig
 from stac_manager.core.context import WorkflowContext
@@ -15,6 +16,7 @@ class UpdateModule:
         """Initialize with configuration."""
         self.config = UpdateConfig(**config)
         self.patches: dict[str, dict] = {}
+        self.logger = logging.getLogger(__name__)  # Default logger
         
         # Load patch file once during initialization
         if self.config.patch_file:
@@ -29,6 +31,14 @@ class UpdateModule:
                 # and let modify handle the missing file error? 
                 # NOTE: Init shouldn't take context. So we raise ConfigurationError.
                 raise ConfigurationError(f"Patch file not found: {path}")
+
+    def set_logger(self, logger: logging.Logger) -> None:
+        """Set step-specific logger for this module.
+        
+        Args:
+            logger: Logger instance to use for this module
+        """
+        self.logger = logger
 
     
     def modify(self, item: dict, context: WorkflowContext) -> dict | None:

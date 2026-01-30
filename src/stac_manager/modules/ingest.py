@@ -153,6 +153,7 @@ class IngestModule:
             ValidationError: If config doesn't match IngestConfig schema
         """
         self.config = IngestConfig(**config)
+        self.logger = logging.getLogger(__name__)  # Default logger
         
         # Validate file exists for file mode
         if self.config.mode == "file":

@@ -12,6 +12,10 @@ class StepConfig(BaseModel):
     module: str
     config: dict[str, Any]
     depends_on: list[str] = Field(default_factory=list)
+    log_level: str | None = Field(
+        default=None,
+        description="Override log level for this step (DEBUG, INFO, WARNING, ERROR)"
+    )
 
 
 class StrategyConfig(BaseModel):
