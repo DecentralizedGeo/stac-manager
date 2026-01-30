@@ -13,38 +13,29 @@ async def test_ingest_module_logs_events():
     
     # Setup context with mock logger
     context = MockWorkflowContext.create()
-    context.logger = mock_logger
     
-    # Setup IngestModule
-    config = {
-        "mode": "file",
-        "source": "items.json",
-        "format": "json"
-    }
-    
-    # Mock file reading to avoid actual IO
-    with patch('stac_manager.modules.ingest.IngestModule._fetch_from_file') as mock_fetch:
-        async def async_gen():
-            yield {"id": "item-1"}
-        mock_fetch.side_effect = async_gen
+    config = {"mode": "api", "source": "https://fake.stac.api"}
+    with patch('stac_manager.modules.ingest.IngestModule._fetch_from_api') as mock_fetch:
+        async def async_gen(_):
+            yield {"id": "test-item"}
+        mock_fetch.return_value = async_gen(None)
         
-        # Patch Path.exists to skip validation
-        with patch('pathlib.Path.exists', return_value=True):
-            module = IngestModule(config)
-            
-            # Run fetch
-            _ = [item async for item in module.fetch(context)]
+        module = IngestModule(config)
+        module.set_logger(mock_logger)  # Inject logger
         
-        # Verify Logs
-        # We expect at least an INFO log about starting/fetching
-        assert mock_logger.info.called or mock_logger.debug.called
+        # Execute
+        [i async for i in module.fetch(context)]
+        
+        # Verify logs
+        info_calls = [args[0] for args, _ in mock_logger.info.call_args_list]
+        assert len(info_calls) > 0, "Expected INFO log calls"
+        assert any("Starting" in str(call) or "Ingest" in str(call) for call in info_calls)
 
 @pytest.mark.asyncio
 async def test_ingest_module_logs_item_details():
     """Test that IngestModule logs item details at DEBUG level."""
     mock_logger = MagicMock(spec=logging.Logger)
     context = MockWorkflowContext.create()
-    context.logger = mock_logger
     
     config = {
         "mode": "file",
@@ -61,6 +52,7 @@ async def test_ingest_module_logs_item_details():
         with patch('stac_manager.modules.ingest.IngestModule._determine_source_type', return_value="file"):
             with patch('pathlib.Path.exists', return_value=True):
                 module = IngestModule(config)
+                module.set_logger(mock_logger)  # Inject logger
                 
                 # Execute
                 [i async for i in module.fetch(context)]
