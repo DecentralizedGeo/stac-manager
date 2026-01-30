@@ -161,6 +161,14 @@ class IngestModule:
             if not source_path.exists():
                 raise ConfigurationError(f"File not found: {self.config.source}")
     
+    def set_logger(self, logger: logging.Logger) -> None:
+        """Set step-specific logger for this module.
+        
+        Args:
+            logger: Logger instance to use for this module
+        """
+        self.logger = logger
+    
     async def fetch(self, context: WorkflowContext) -> AsyncIterator[dict]:
         """Fetch STAC items from configured source.
         
