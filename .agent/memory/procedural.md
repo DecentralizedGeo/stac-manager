@@ -96,6 +96,42 @@ class Module:
 
 
 
+## Logging Implementation Standard (v1.1.0)
+
+### Logger Injection
+All modules MUST implement the `set_logger` protocol to allow step-specific logger injection from the orchestrator.
+
+**Pattern:**
+```python
+class Module:
+    def __init__(self, config: dict):
+        self.config = ModuleConfig(**config)
+        self.logger = logging.getLogger(__name__)  # Default safe logger
+
+    def set_logger(self, logger: logging.Logger) -> None:
+        """Set step-specific logger."""
+        self.logger = logger
+```
+
+### Logging Levels & Message Format
+Use pipe-separated key-value pairs for machine readability and strict level separation.
+
+- **INFO (Operational)**: High-level summaries, processing counts, state transitions.
+  - Format: `Operation | item: {id} | key: val`
+  - Example: `Applied extension | item: LC09... | fields_scaffolded: 12`
+  - Example: `Flushed to disk | format: json | items: 100`
+
+- **DEBUG (Diagnostic)**: Per-item or per-field details, noisy operations.
+  - Format: `Detail | item: {id} | ...`
+  - Example: `Processing item | item: LC09...`
+  - Example: `Scaffolded properties | item: LC09... | fields: 4`
+
+### Testing Pattern
+- **Injection Test**: Verify `set_logger` works.
+- **Log Content Test**: verification using `MagicMock` or `caplog`.
+  - Fix common pitfall: When testing file writing, mock `pathlib.Path.write_text` and `os.replace` to avoid I/O but verify the *log message* was emitted.
+
+
 ## Development Workflow
 - **Spec-First**: Always read `docs/spec/` before proposing designs.
 - **TDD Pattern**: 
