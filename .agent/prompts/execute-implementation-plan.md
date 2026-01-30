@@ -50,7 +50,7 @@ At the end of every batch, provide a "Batch Report":
 Once all phases of the plan are complete:
 1.  **Comprehensive Test Run**: Run the entire test suite to ensure no regressions.
 2.  **Root Cause Review**: Verify that error handling (e.g., handling missing STAC assets) is robust and documented.
-3.  **Update Memory**: Invoke the `@[.agent/skills/agent-memory/SKILL.md]` for a sprint retrospective of what was done. Reflect on the past sprint on what went well, what went wrong, and what was learned, with the goal of identifying actionable improvements.
+3.  **Update Memory**: Invoke the `@[.agent/skills/agent-memory/SKILL.md]` for a sprint retrospective of what was done. Reflect on what went well, what went wrong, and what was learned to identify actionable improvements.
 
 ---
 

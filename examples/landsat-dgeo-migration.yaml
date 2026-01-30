@@ -5,7 +5,7 @@ version: "1.0"
 # Settings
 settings:
   logging:
-    level: DEBUG
+    level: info
     # file: "logs/execution.json"
     output_format: "text"
   resume_from_checkpoint: false
@@ -23,7 +23,7 @@ steps:
       collection_id: "landsat-c2l1"
       
       # Start with a small test set
-      # max_items: 10  # Change to null for production run (all items)
+      max_items: 10  # Change to null for production run (all items)
       concurrency: 5
       
       # Optional: Filter by date range or bbox
@@ -40,10 +40,7 @@ steps:
       # Remove the alternate asset objects containing IPFS and Filecoin
       # Wildcards (*) match all asset keys
       removes:
-        - "assets.*.alternate.IPFS"
-        - "assets.*.alternate.Filecoin"
-        # Keep S3 alternates if present
-        - "assets.*.alternate.S3"  # Uncomment to remove S3 too
+        - "assets.*.alternate"
 
   # ============================================================================
   # STEP 3: Extension - Add dgeo extension scaffolding
@@ -120,13 +117,13 @@ steps:
       field_mapping:
         # For ALL assets: set alternate field from input data
         # {asset_key} template variable substitutes actual asset name (e.g., "blue", "ANG.txt", etc.)
-        assets.*.alternate: "assets.{asset_key}.alternates"
+        assets.*.alternate: 'assets."{asset_key}".alternates'
         
         # For ALL assets: update href to IPFS URL
-        assets.*.href: "assets.{asset_key}.alternates.ipfs.href"
+        assets.*.href: 'assets."{asset_key}".alternates.ipfs.href'
         
         # For ALL assets: update type to match IPFS format
-        assets.*.type: "assets.{asset_key}.alternates.ipfs.type"
+        assets.*.type: 'assets."{asset_key}".alternates.ipfs.type'
 
   # ============================================================================
   # STEP 6: Update - Set final defaults and timestamps
@@ -164,7 +161,8 @@ steps:
   # ============================================================================
   - id: output_json
     module: OutputModule
-    depends_on: [set_final_defaults]
+    # depends_on: [set_final_defaults]
+    depends_on: [set_asset_cids]
     config:
       # Output directory
       base_dir: "./outputs/landsat-dgeo-migrated"

@@ -38,6 +38,11 @@ class ValidateModule:
         Raises:
             DataProcessingError: If strict=True and validation fails
         """
+        item_id = item.get("id", "unknown")
+        
+        # DEBUG: Validating item
+        self.logger.debug(f"Validating item | item: {item_id}")
+        
         # Validate item
         is_valid = self.validator.validate_dict(item)
         
@@ -49,15 +54,21 @@ class ValidateModule:
             else:
                 error_msg = "Validation failed"
             
+            # WARNING: Validation failed
+            self.logger.warning(f"Validation failed | item: {item_id} | errors: {error_msg}")
+            
             if self.config.strict:
                 raise DataProcessingError(f"STAC validation failed: {error_msg}")
             
             context.failure_collector.add(
-                item_id=item.get("id", "unknown"),
+                item_id=item_id,
                 error=f"STAC validation failed: {error_msg}",
                 step_id="validate"
             )
             
             return None  # Drop invalid item
+        
+        # INFO: Validation passed
+        self.logger.info(f"Validated item | item: {item_id} | status: valid")
         
         return item

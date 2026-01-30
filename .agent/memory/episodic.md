@@ -1,5 +1,9 @@
-# Episodic Memory: STAC Manager Project
+# Episodic Memory: STAC Manager Timeline
 
+## Overview
+This file contains a chronological record of major decisions, milestones, and research breakthroughs in the STAC Manager development process.
+
+---
 [ID: INITIAL_MEMORY_INIT] -> Follows [NONE]. 
 **Date**: 2026-01-22
 **Context**: Initializing persistent memory store for STAC Manager development.
@@ -612,7 +616,7 @@
   - Each asset receives unique template-expanded values (visual→`visual/`, B04→`B04/`, etc.)
   - Backward compatibility maintained: Old nested dict defaults still work
 
-- **Key Technical Achievements**:
+  - **Key Technical Achievements**:
   - **Wildcard Expansion**: Powerful pattern-matching for bulk asset operations
   - **Template Variables**: Dynamic per-item/per-asset value substitution
   - **Object Independence**: Deep copy ensures no reference sharing between assets
@@ -639,6 +643,7 @@
 - **Testing**:
     - Created `test_transform_csv.py` for specific CSV/Arrow scenarios.
     - Verified all 11 Transform module tests pass with new terminology.
+
 [ID: TRANSFORM_MODULE_ASSET_MAPPING_FIX] -> Follows [TRANSFORM_MODULE_REFACTOR].
 **Date**: 2026-01-28
 **Context**: Resolved complex asset mapping issues in TransformModule, specifically handling nested structures and key naming collisions.
@@ -681,3 +686,142 @@
 - **Expected Impact**: 96% reduction in config verbosity (75 lines → 3 lines for Landsat example)
 - **Status**: ✅ PLANNING COMPLETE, awaiting execution decision
 
+[ID: TRANSFORM_WILDCARD_IMPLEMENTATION] -> Follows [TRANSFORM_WILDCARD_PATTERN_PLANNING].
+**Date**: 2026-01-29
+**Context**: Successfully implemented wildcard field mapping and strategy-based filtering for TransformModule, achieving dramatic configuration simplification.
+**Events**:
+- **Phase 1: Terminology Alignment** ✅
+  - Renamed all "sidecar" references to "input" (sidecar_index → input_index)
+  - Updated docstrings, error messages, test assertions
+  - Files: transform.py, test_transform.py, test_transform_csv.py, test_logging_instrumentation.py
+- **Phase 2: Configuration Updates** ✅
+  - Updated `TransformConfig.strategy`: `Literal['merge', 'update']` → `Literal['update_existing', 'merge']`
+  - Changed default: `'merge'` → `'update_existing'` (safer, won't create unexpected fields)
+  - Created test_transform_config.py with 5 validation tests
+  - Rejected old `'update'` name (confusing with UpdateModule)
+- **Phase 3: Wildcard Expansion** ✅
+  - Integrated `expand_wildcard_paths` utility from field_ops.py
+  - Supports wildcard patterns: `assets.*` matches all assets
+  - Template variable substitution: `{item_id}`, `{collection_id}`, `{asset_key}`
+  - Returns tuple keys for correct dot-handling (e.g., ("assets", "ANG.txt", "href"))
+- **Phase 4: Strategy Filtering** ✅ (Critical Implementation)
+  - **Sentinel Value Pattern Discovery**:
+    - Problem: Need to distinguish "field doesn't exist" from "field = None"
+    - Solution: Use `object()` as sentinel with identity check (`is` not `==`)
+    - Location: transform.py lines 139-156 (with 8-line explanatory comment)
+  - **update_existing logic**: Filter expanded wildcards to only existing paths
+  - **merge logic**: Apply all expanded wildcards (creates new paths)
+  - Fixed 5 existing tests by adding explicit `strategy: "merge"`
+- **Phase 5: Integration Testing** ✅
+  - Created test_transform_landsat_wildcards.py with real Landsat-8 structure
+  - Demonstrated 96% config reduction: 72 mappings (117 lines) → 3 rules (13 lines)
+  - Validates wildcard expansion works for 24 Landsat assets including dot-named keys
+  - Generated comprehensive walkthrough.md documenting entire implementation
+- **Configuration Impact (Real Example)**:
+  - **Before**: 72 explicit mappings for 24 Landsat assets × 3 fields = 117 YAML lines
+  - **After**: 3 wildcard rules = 13 YAML lines
+  - **Landsat YAML Updated**: examples/landsat-dgeo-migration.yaml refactored
+- **Test Results**: 21/21 tests passing (20 unit + 1 integration)
+- **Breaking Changes**:
+  - Default strategy changed (old configs need explicit `strategy: merge` for field creation)
+  - Old `strategy: update` rejected (must use `update_existing`)
+- **Key Learnings** (Sprint Retrospective):
+  - ✅ TDD caught sentinel value bug early
+  - ❌ Config field `strategy` was validated but never implemented (30min debugging)
+  - ❌ Pre-existing 12 test failures investigated (unrelated to Transform changes)
+  - 📝 Documented sentinel pattern with detailed inline comments
+  - 📝 Created sprint_retrospective.md artifact with lessons learned
+
+**Status**: ✅ **COMPLETE - PRODUCTION READY**
+
+[ID: UPDATE_MODULE_WILDCARD_REMOVAL_FIX] -> Follows [TRANSFORM_WILDCARD_IMPLEMENTATION].
+**Date**: 2026-01-29
+**Context**: Fixed critical bug where UpdateModule's `removes` configuration didn't support wildcard patterns, causing failures when trying to remove fields like `assets.*.alternate`.
+**Events**:
+- **Root Cause Analysis**:
+  - UpdateModule removal logic (lines 95-110) split paths literally without wildcard expansion
+  - Pattern `assets.*.alternate` looked for literal key named `*` instead of matching all assets
+  - Existing `expand_wildcard_paths` utility was used for updates but not removals
+- **Implementation (TDD)**:
+  - Created `expand_wildcard_removal_paths()` utility in `field_ops.py` (lines 240-295)
+  - Returns list of path tuples for removal (simpler than dict for updates)
+  - Handles single wildcards, multiple paths, nested wildcards
+  - Updated UpdateModule to use new utility for removal expansion
+- **Testing**:
+  - Added 4 unit tests for `expand_wildcard_removal_paths` utility
+  - Added `test_update_module_removes_wildcard_fields` integration test
+  - All 23 tests pass (100% pass rate for field_ops + UpdateModule)
+- **End-to-End Verification**:
+  - Ran `landsat-dgeo-migration.yaml` workflow: 416 items processed, 0 failures
+  - Verified no `alternate` fields remain in output (grep search returned no matches)
+  - Successful removal of `assets.*.alternate` across all Landsat assets
+- **Key Technical Achievement**:
+  - Reused wildcard expansion pattern from UpdateModule updates
+  - Maintained backward compatibility with simple (non-wildcard) removals
+  - No performance impact, efficient path expansion
+
+**Status**: ✅ **COMPLETE - PRODUCTION READY**
+
+[ID: TRANSFORM_AND_UPDATE_REFACTOR] -> Follows [UPDATE_MODULE_WILDCARD_REMOVAL_FIX].
+**Date**: 2026-01-29
+**Context**: Resolved critical path parsing bugs for assets with dots in keys and refactored shared utilities to eliminate duplication across modifier modules.
+**Events**:
+- **Critical Fix - Dot-in-Key Parsing**:
+  - **Issue**: `assets.ANG.txt` path was being split into `['assets', 'ANG', 'txt']` instead of `['assets', 'ANG.txt']`.
+  - **Solution**: Implemented `parse_field_path` in `field_ops.py` to handle quoted keys (e.g., `assets."ANG.txt".href`).
+  - **Impact**: Enables correct targeting of STAC assets with dot-notation names (common in Landsat).
+- **Refactoring - Shared Utilities**:
+  - **Centralized `set_nested_field`**: Enhanced `field_ops.py` to handle path creation (merged from UpdateModule).
+  - **Shared `dot_notation_to_nested`**: Moved common logic from `UpdateModule` and `ExtensionModule` to `field_ops.py`.
+  - **Result**: `UpdateModule` is now significantly cleaner, delegating all field ops to utilities.
+- **Verification**:
+  - **Reproduction**: Created `reproduce_bug.py` to confirm end-to-end fix.
+  - **Tests**: Added specific test cases for quoted keys in `TransformModule` and `ExtensionModule`.
+  - **Example**: Updated `landsat-dgeo-migration.yaml` to use quoted JMESPath keys.
+- **Key Learnings**:
+  - **Naive Splitting is Dangerous**: Never use `str.split('.')` for field paths in STAC.
+  - **Field Ops Centralization**: Moving core logic to `field_ops.py` prevents subtle drift between modules.
+  - **JMESPath Quoting**: Always quote template variables in JMESPath if they might contain special characters: `"{variable}"`.
+
+**Status**: ✅ **COMPLETE - REFACTOR VERIFIED**
+
+---
+
+## [2026-01-30] Comprehensive Logging Specification Creation
+
+**Context**: After completing logging infrastructure and UpdateModule prototype in previous session, needed to create formal specification for remaining module instrumentation.
+
+**Challenge**: Initial request framed work as "Phase 5" but this was a feature enhancement, not a roadmap phase. Phases 1-3 were already complete.
+
+**Resolution**:
+- Clarified with user that logging improvements are cross-cutting enhancements, not standalone phase
+- Created comprehensive specification documenting BOTH completed work (Phases 1-3) and remaining work (Phases 4-5)
+- Followed `writing-plans` skill format with strict TDD structure
+- Positioned as v1.1.0 feature enhancement rather than roadmap phase
+
+**Key Decisions**:
+1. **Specification Structure**: Single document covering completed + remaining work (not just remaining)
+2. **Task Granularity**: 26 total tasks (20 for modules, 6 for validation/docs), 2-5 minutes each
+3. **Module Order**: IngestModule → TransformModule → ExtensionModule → OutputModule → ValidateModule
+4. **Pattern Consistency**: All modules follow exact UpdateModule prototype pattern (logger injection, INFO/DEBUG structure)
+
+**Deliverables**:
+- `docs/plans/2026-01-30-stac-manager-comprehensive-logging-specification.md` (1112 lines)
+- Complete TDD implementation plan with:
+  - Exact test code for each module
+  - Exact implementation code
+  - Specific pytest commands with expected output
+  - Integration test patterns
+  - Documentation and validation tasks
+
+**Success Metrics**:
+- All 5 remaining modules will have logger injection via `set_logger()`
+- INFO-level logging for operational visibility
+- DEBUG-level logging for diagnostic detail
+- Pipe-separated message format: `operation | key: value | key: value`
+
+**Learnings**:
+- Always clarify scope terminology early ("Phase" vs "Enhancement" vs "Feature")
+- Comprehensive specs should document completed work for context, not just what remains
+- Pattern validation approach (prototype one, then roll out) reduces risk
+- Agent memory skill should be invoked for retrospectives to capture insights

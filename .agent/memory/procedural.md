@@ -1,5 +1,50 @@
 # Procedural Memory: STAC Manager Best Practices
 
+## Specification Writing Patterns (v1.1.0)
+
+### Comprehensive Specification Structure
+**When Documenting Feature Enhancements**:
+- Include BOTH completed work AND remaining work in single document
+- Completed sections provide context and establish patterns
+- Remaining sections reference completed patterns ("follow UpdateModule approach")
+- Use clear phase markers: "✅ Completed" vs "📋 Pending"
+
+### Terminology Clarification
+**Roadmap Phases vs Feature Enhancements**:
+- **Roadmap Phases**: Major architectural components (Utilities, Modules, Orchestration)
+- **Feature Enhancements**: Cross-cutting improvements to existing functionality (logging, caching, metrics)
+- **ALWAYS clarify with user** if work is a new phase or enhancement to existing phase
+- Document placement: Phases in roadmap.md, Enhancements in dated specification docs
+
+### Pattern Validation Approach
+**Before Rolling Out Changes Across Modules**:
+1. **Prototype**: Implement fully on ONE representative module (e.g., UpdateModule)
+2. **Validate**: Manual testing + unit tests + integration tests
+3. **Document Pattern**: Capture exact code structure, message format, test approach
+4. **Roll Out**: Apply validated pattern to remaining modules
+5. **Benefit**: Reduces rework, ensures consistency, validates assumptions early
+
+### TDD Specification Format (writing-plans skill)
+**For Each Task**:
+- Step 1: Write failing test (EXACT code, not "add test for X")
+- Step 2: Run test command (EXACT pytest command)
+- Step 3: Minimal implementation (EXACT code)
+- Step 4: Verify test passes (EXACT command)
+- Step 5: Commit (EXACT git commands)
+
+**Task Granularity**:
+- 2-5 minutes per task
+- One logical unit of work (e.g., "Logger Injection" not "All Logging")
+- 4 tasks per module typical: Injection, INFO logging, DEBUG logging, Integration test
+
+### Sprint Retrospective Pattern
+**At End of Planning Session**:
+- Invoke agent-memory skill explicitly for retrospective
+- Update episodic.md with milestone, context, decisions, outcomes
+- Update procedural.md with new patterns discovered
+- Update semantic.md with new architectural concepts
+- Focus on 1-3 critical insights (not comprehensive log)
+
 ## Development Workflow
 - **Spec-First**: Always read `docs/spec/` before proposing designs.
 - **TDD Pattern**: 
@@ -36,12 +81,16 @@
 ## Wildcard Pattern Best Practices (v1.1.0)
 
 ### Design Principles
-- **Separation of Concerns**: Keep wildcard logic in shared utility (`expand_wildcard_paths`) for consistency across modules
+- **Separation of Concerns**: Keep wildcard logic in shared utilities for consistency across modules
+  - `expand_wildcard_paths`: For updates/additions (returns dict of path→value)
+  - `expand_wildcard_removal_paths`: For removals (returns list of path tuples)
 - **Backward Compatibility**: Preserve support for nested dict defaults (non-wildcard) for ExtensionModule template building
 - **Filter Expandable Defaults**: Only process defaults with `*` or `.` in keys as wildcards to avoid over-expansion
 - **Object Independence**: Each expanded path must get a deep copy of dict values to prevent reference sharing
 
 ### Implementation Pattern
+
+**For Updates/Additions:**
 ```python
 # In modify() method (per-item processing)
 if has_wildcards(config.defaults):
@@ -53,6 +102,29 @@ if has_wildcards(config.defaults):
     # Apply each expanded path individually
     for path, value in expanded.items():
         set_nested_field(item, path, value)
+```
+
+**For Removals:**
+```python
+# In modify() method (for field removal)
+if config.removes:
+    # Expand wildcards to get all matching paths
+    expanded_paths = expand_wildcard_removal_paths(
+        config.removes,
+        item
+    )
+    
+    # Remove each expanded path
+    for path_tuple in expanded_paths:
+        target = item
+        for key in path_tuple[:-1]:
+            if key in target and isinstance(target[key], dict):
+                target = target[key]
+            else:
+                break
+        else:
+            if path_tuple[-1] in target:
+                del target[path_tuple[-1]]
 ```
 
 ### Testing Requirements
@@ -105,6 +177,78 @@ if has_wildcards(config.defaults):
 - **Missing input_join_key**: List format will fail without this parameter
 - **Over-Nesting**: Don't use nested JMESPath like `properties.field` when input is flat dict
 - **Wrong Default Strategy**: Old default was `merge`, now `update_existing` (safer)
+
+## Sentinel Value Pattern for Field Existence
+
+### Problem
+Need to distinguish between:
+1. Field doesn't exist → should return "not found"
+2. Field exists with `None` value → should return `None`
+
+Using `None` as default in `get_nested_field(item, path, default=None)` creates ambiguity.
+
+### Solution
+Use `object()` as sentinel value with identity check:
+
+```python
+_MISSING = object()  # Unique sentinel instance
+result = get_nested_field(item, path, default=_MISSING)
+if result is not _MISSING:
+    # Field exists (even if value is None)
+    process(result)
+else:
+    # Field truly doesn't exist
+    skip()
+```
+
+### Why This Works
+- `object()` creates guaranteed-unique instance
+- Identity check (`is`) won't match any real data
+- Equality check (`==`) could match user data
+
+### When to Use
+- `update_existing` strategy filtering (only update existing paths)
+- Conditional logic based on field presence vs value
+- Any case where `None` is a valid field value
+
+## Sprint Workflow Best Practices
+
+### Pre-Sprint Baseline Checklist
+**Action**: Run full test suite before starting implementation  
+**Why**: Distinguish new failures from pre-existing issues  
+**When**: First step after task acceptance  
+**Command**: `pytest tests/ -v --tb=short`
+
+**Baseline Recording**:
+1. Record total pass/fail count
+2. List failing test names
+3. Verify module-specific tests all pass
+4. Document known failures in task.md
+
+### Config Field Implementation Verification
+**Problem**: Pydantic validates field exists, but doesn't ensure it's used in code  
+**Example**: `strategy` field was validated in config but never checked in `modify()`
+
+**Verification Steps**:
+1. After defining config field: `grep -r "self.config.field_name" src/`
+2. Expect at least one usage in implementation
+3. If zero results: Field is defined but unused (bug!)
+
+**When to Check**: During implementation, before writing tests
+
+### Global Terminology Change Checklist
+When renaming core concepts (e.g., "sidecar" → "input"):
+
+**Systematic Order**:
+1. Spec files: `docs/spec/*.md`
+2. Config models: `src/*/config.py`
+3. Implementation: `src/*/*.py`
+4. Tests: `tests/**/*.py`
+5. Examples: `examples/*.yaml`, `samples/**/*`
+6. Scripts: `scripts/*.py`
+7. Documentation: `docs/**/*.md`, `README.md`
+
+**Tools**: Use `grep -r "old_term" .` then IDE find/replace with preview
 
 
 ## Documentation Accuracy Patterns
@@ -364,4 +508,15 @@ checkpoint.flush()
 - **YAML Syntax**: In YAML, you must wrap the entire key in single quotes to preserve the internal double quotes.
   - **Correct**: `'assets."ANG.txt".alternate': "source"`
   - **Incorrect**: `assets.ANG.txt.alternate: "source"` (Parses as `assets` -> `ANG` -> `txt` -> `alternate`)
-- **Parser Support**: Ensure `field_ops.parse_field_path` is used whenever splitting path strings to respect these quotes.
+
+## Nested Field Operations (Refactored)
+- **Centralized Logic**: Do not implement ad-hoc dictionary traversal or path creation. Always use `stac_manager.utils.field_ops`.
+  - `set_nested_field(item, path, value, create_missing=True)`: Safely sets values, creating intermediate dicts if needed.
+  - `get_nested_field(item, path, default=obj)`: Safely retrieves values.
+  - `dot_notation_to_nested(dict)`: Converts flat dot-notation dicts to nested structures.
+- **Path Parsing**: Never use `path.split('.')`. Always use `parse_field_path(path)` to respect quoted keys (e.g., `assets."ANG.txt"`).
+
+## Asset Handling
+- **Dot-in-Keys**: Asset keys often contain filenames with dots (e.g., `ANG.txt`).
+- **Quoting**: When referencing these in configuration (YAML), always quote the segment: `'assets."ANG.txt".href'`.
+- **Wildcard Expansion**: Use `expand_wildcard_paths` which uses `parse_field_path` internally to safely handle these keys.

@@ -74,6 +74,17 @@
   4. Apply template variable substitution to values
   5. Return fully expanded dict with concrete paths
 
+### Removal Variant (`expand_wildcard_removal_paths`)
+- **Location**: `stac_manager/utils/field_ops.py` (lines 240-295)
+- **Purpose**: Expand wildcard patterns for field removal operations
+- **Returns**: List of path tuples (simpler than dict, no values needed)
+- **Algorithm**:
+  1. Parse each path into segments
+  2. Find all wildcards (`*`) in path
+  3. Recursively expand wildcards against item structure
+  4. Return concrete path tuples for deletion
+- **Example**: `["assets.*.alternate"]` → `[("assets", "blue", "alternate"), ("assets", "red", "alternate")]`
+
 ### Template Variables
 - **Available Variables**:
   - `{item_id}`: Item's unique identifier
@@ -98,9 +109,10 @@
 - **Storage**: Separates `raw_defaults` from expanded wildcards in `__init__`
 
 #### UpdateModule
-- **Wildcard Updates**: Expands `self.config.updates` if wildcards present
-- **Application**: Uses `set_field_with_path_creation()` after expansion
-- **Consistency**: Uses same `expand_wildcard_paths()` utility as ExtensionModule
+- **Wildcard Updates**: Expands `self.config.updates` if wildcards present using `expand_wildcard_paths()`
+- **Wildcard Removals**: Expands `self.config.removes` if wildcards present using `expand_wildcard_removal_paths()`
+- **Application**: Uses `set_field_with_path_creation()` after expansion for updates, direct `del` for removals
+- **Consistency**: Uses shared utilities from `field_ops.py` for both operations
 
 ### Testing Pattern
 - **Verification**: Test that each asset receives unique values after expansion
@@ -145,6 +157,14 @@
   - **Behavior**: Creates new assets/fields from input data
   - **Use Case**: Integrate external metadata that may contain additional assets
 - **Rejected Strategy**: `"overwrite"` - use UpdateModule to remove + TransformModule merge instead
+
+### Sentinel Value Pattern (v1.1.0)
+- **Purpose**: Distinguish "field doesn't exist" from "field exists with None value"
+- **Implementation**: `_MISSING = object()` as unique sentinel
+- **Check**: `result = get_nested_field(item, path, default=_MISSING); if result is not _MISSING`
+- **Why `is` not `==`**: Identity check ensures sentinel never matches real data
+- **Location**: `transform.py` lines 139-156 (with detailed explanatory comments)
+- **Use Case**: `update_existing` strategy uses this for reliable existence filtering
 
 ### Missing Item Handling
 - Configurable via `handle_missing` (`ignore`, `warn`, `error`)
@@ -439,3 +459,47 @@ StacManager(
     1. Try `input_data[source]` (Direct key lookup - handles spaces/special chars).
     2. If missing, try `jmespath.search(source, input_data)` (Complex extraction).
     3. If both fail, return `None`.
+
+## Logging System Architecture (v1.1.0)
+
+### Logger Hierarchy
+- **Root Logger**: `stac_manager` (configured by CLI/workflow settings)
+- **Workflow Logger**: `stac_manager.{workflow_name}` (one per workflow execution)
+- **Step Logger**: `stac_manager.{workflow_name}.{step_id}` (one per step, injected into modules)
+- **Inheritance**: Step loggers inherit level from workflow logger unless overridden
+
+### Logger Injection Pattern
+- **Module Interface**: All modules implement `set_logger(logger: logging.Logger) -> None`
+- **Default Logger**: Modules initialize `self.logger = logging.getLogger(__name__)` in `__init__`
+- **Injection Timing**: StacManager calls `module.set_logger(step_logger)` during `_instantiate_modules()`
+- **Benefit**: Enables per-step log level control and hierarchical filtering
+
+### Message Structure
+- **Format**: `{operation} | key: value | key: value`
+- **Separator**: Pipe `|` for visual clarity in console output
+- **Item Context**: Always include `item: {item_id}` in item-processing logs
+- **Example INFO**: `Enriched item | item: LC09_L2SP_042033_20231015 | fields_mapped: 24 | strategy: update_existing`
+- **Example DEBUG**: `Mapped field | item: LC09... | target: properties.cloud_cover | source: cloud_cover | value: 42`
+
+### Logging Levels
+- **INFO**: Operational visibility (summaries, counts, status changes)
+  - Module start/completion
+  - Item counts and progress (every N items)
+  - Enrichment/validation summaries
+- **DEBUG**: Diagnostic details (field-level operations)
+  - Individual item processing
+  - Field-by-field changes
+  - Match/lookup details
+  - Buffer state
+
+### ShortPathFilter
+- **Purpose**: Convert full file paths to readable module notation
+- **Example**: `C:\Users\...\stac-manager\src\stac_manager\modules\update.py` → `modules.update`
+- **Implementation**: Extracts relative path from `stac_manager/` root, converts to dot notation
+- **Applied**: All console and file handlers for better readability
+
+### Per-Step Configuration
+- **YAML Field**: `log_level` in `StepConfig` (optional, inherits from global if not set)
+- **Override Priority**: Step-level > Workflow-level > CLI default (INFO)
+- **Use Case**: Enable DEBUG for specific problematic step while keeping others at INFO
+- **Configuration Source**: StacManager reads from `workflow.settings.logging.level`, not CLI parameter
