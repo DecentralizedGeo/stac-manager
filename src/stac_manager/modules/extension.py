@@ -190,20 +190,34 @@ class ExtensionModule:
         Returns:
             Item with extension applied
         """
+        item_id = item.get("id", "unknown")
+        
+        # DEBUG: Processing item
+        self.logger.debug(f"Processing item | item: {item_id}")
+        
+        fields_scaffolded = 0
+        defaults_applied = 0
+        
         # 1. Tag extension
         if "stac_extensions" not in item:
             item["stac_extensions"] = []
         
+        extension_added = False
         if self.config.schema_uri not in item["stac_extensions"]:
             item["stac_extensions"].append(self.config.schema_uri)
+            extension_added = True
+            self.logger.debug(f"Added extension URI | item: {item_id} | uri: {self.config.schema_uri}")
         
         # 2. Apply properties template
         if "properties" in self.template:
+            prop_count = len(self.template["properties"])
             item["properties"] = deep_merge(
                 item.get("properties", {}), 
                 self.template["properties"], 
                 strategy='keep_existing'
             )
+            fields_scaffolded += prop_count
+            self.logger.debug(f"Scaffolded properties | item: {item_id} | fields: {prop_count}")
         
         # 3. Apply assets template (with user defaults)
         if "assets" in self.template:
@@ -214,13 +228,23 @@ class ExtensionModule:
                 # Create a default asset using pystac
                 default_asset = pystac.Asset(href="Asset reference", title="Asset title")
                 item["assets"] = {"AssetId": default_asset.to_dict()}
+                self.logger.debug(f"Created default asset | item: {item_id}")
             
             # Extend all assets with the template
+            asset_count = len(item["assets"])
             for asset_key in item["assets"]:
                 item["assets"][asset_key] = deep_merge(
                     item["assets"][asset_key],
                     asset_template,
                     strategy='keep_existing'
+                )
+            
+            if asset_template:
+                template_fields = len(asset_template)
+                fields_scaffolded += template_fields * asset_count
+                self.logger.debug(
+                    f"Scaffolded assets | item: {item_id} | assets: {asset_count} | "
+                    f"fields_per_asset: {template_fields}"
                 )
         
         # 4. Expand and apply wildcard defaults (per-item, supports template variables)
@@ -248,5 +272,16 @@ class ExtensionModule:
                     from stac_manager.utils.field_ops import set_nested_field
                     for path, value in expanded_defaults.items():
                         set_nested_field(item, path, value)
+                        defaults_applied += 1
+                        self.logger.debug(
+                            f"Applied default | item: {item_id} | path: {path} | value: {value}"
+                        )
+        
+        # INFO: Summary of extension application
+        self.logger.info(
+            f"Applied extension | item: {item_id} | uri: {self.config.schema_uri} | "
+            f"fields_scaffolded: {fields_scaffolded} | defaults_applied: {defaults_applied}"
+        )
         
         return item
+

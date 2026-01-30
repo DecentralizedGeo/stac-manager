@@ -182,26 +182,35 @@ class OutputModule:
             return
 
         if not isinstance(item, dict):
-            context.logger.error(f"OutputModule received invalid item type: {type(item)}")
+            self.logger.error(f"OutputModule received invalid item type: {type(item)}")
             return
+
+        item_id = item.get("id", "unknown")
 
         # Extract collection_id from first item or context
         if self.collection_id is None:
             self.collection_id = item.get("collection") or context.data.get("collection_id", "default")
+            self.logger.debug(f"Set collection_id | collection: {self.collection_id}")
 
         # Create collection.json on first item
         if not self.collection_created:
             await self._create_collection(context)
             self.collection_created = True
-            context.logger.info(f"Initialized output for collection {self.collection_id}")
+            self.logger.info(f"Initialized output | collection: {self.collection_id} | format: {self.config.format}")
 
         # Add relative self link to item
         item = self._add_item_links(item)
 
         self.buffer.append(item)
+        self.logger.debug(
+            f"Buffered item | item: {item_id} | buffer_size: {len(self.buffer)}/{self.config.buffer_size}"
+        )
 
         # Auto-flush when buffer is full
         if len(self.buffer) >= self.config.buffer_size:
+            self.logger.info(
+                f"Auto-flush triggered | buffered: {len(self.buffer)} | total_written: {self.items_written}"
+            )
             await self._flush(context)
 
     async def finalize(self, context: WorkflowContext) -> dict:
@@ -237,12 +246,17 @@ class OutputModule:
         """Write items as individual JSON files with atomic writes."""
         import os
 
+        if not self.buffer:
+            return
+
         # base_dir/collection_id/items/
         collection_dir = Path(self.config.base_dir) / str(self.collection_id)
         items_dir = collection_dir / "items"
 
         # Create directory if missing
         await asyncio.to_thread(items_dir.mkdir, parents=True, exist_ok=True)
+
+        item_count = len(self.buffer)
 
         # Write each item
         for item in self.buffer:
@@ -259,7 +273,7 @@ class OutputModule:
                 await asyncio.to_thread(os.replace, str(temp_path), str(item_path))
 
                 self.items_written += 1
-                context.logger.debug(f"Writing item {item_id} to {item_path}")
+                self.logger.debug(f"Wrote item | item: {item_id} | path: {item_path.name}")
 
             except Exception:
                 # Clean up temp file on error
@@ -269,6 +283,11 @@ class OutputModule:
 
         # Clear buffer
         self.buffer.clear()
+
+        # INFO: Flush summary
+        self.logger.info(
+            f"Flushed to disk | format: json | items: {item_count} | total_written: {self.items_written}"
+        )
 
     async def _flush_parquet(self, context: WorkflowContext) -> None:
         """Write items as Parquet file."""
@@ -287,6 +306,8 @@ class OutputModule:
         # Create directory if missing
         await asyncio.to_thread(items_dir.mkdir, parents=True, exist_ok=True)
 
+        item_count = len(self.buffer)
+
         # Generate filename with timestamp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         parquet_path = items_dir / f"items_{timestamp}.parquet"
@@ -302,8 +323,8 @@ class OutputModule:
             # Atomic rename
             await asyncio.to_thread(os.replace, str(temp_path), str(parquet_path))
 
-            self.items_written += len(self.buffer)
-            context.logger.debug(f"Writing batch of {len(self.buffer)} items to {parquet_path}")
+            self.items_written += item_count
+            self.logger.debug(f"Wrote batch | items: {item_count} | path: {parquet_path.name}")
 
         except Exception:
             # Clean up temp file on error
@@ -313,6 +334,11 @@ class OutputModule:
 
         # Clear buffer
         self.buffer.clear()
+
+        # INFO: Flush summary
+        self.logger.info(
+            f"Flushed to disk | format: parquet | items: {item_count} | total_written: {self.items_written}"
+        )
 
     def _add_item_links(self, item: dict) -> dict:
         """

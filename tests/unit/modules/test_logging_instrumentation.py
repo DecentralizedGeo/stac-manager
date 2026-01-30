@@ -265,16 +265,18 @@ async def test_output_module_logs_writes(tmp_path):
     """Test that OutputModule logs file writing."""
     mock_logger = MagicMock(spec=logging.Logger)
     context = MockWorkflowContext.create()
-    context.logger = mock_logger
     
     config = {
         "base_dir": str(tmp_path),
         "format": "json",
-        "buffer_size": 1
+       "buffer_size": 1
     }
     
     from stac_manager.modules.output import OutputModule
     module = OutputModule(config)
+    
+    # Inject logger into module (not context)
+    module.set_logger(mock_logger)
     
     # Process item
     item = {"id": "test-item", "properties": {}}
@@ -291,4 +293,6 @@ async def test_output_module_logs_writes(tmp_path):
         # Verify logs
         # Expecting DEBUG log about writing file
         debug_calls = [args[0] for args, _ in mock_logger.debug.call_args_list]
-        assert any("test-item" in str(call) for call in debug_calls)
+        assert any("test-item" in str(call) for call in debug_calls), \
+            f"Expected DEBUG log with 'test-item', got: {debug_calls}"
+
