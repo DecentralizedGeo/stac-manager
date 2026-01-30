@@ -61,4 +61,5 @@ steps:
         assert "timestamp" in log_record
         assert "level" in log_record
         assert "message" in log_record
-        assert "step_id" in log_record
+        # Step identification now comes from the 'logger' field (e.g., 'stac_manager.log-test-workflow.ingest')
+        assert "logger" in log_record
