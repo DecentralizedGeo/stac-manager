@@ -157,6 +157,8 @@ steps:
         result = runner.invoke(cli, ['run-workflow', 'workflow.yaml'])
 
         # Should complete successfully
+        if result.exit_code != 0:
+            print(result.output)
         assert result.exit_code == 0
         assert 'completed' in result.output.lower() or 'success' in result.output.lower()
 

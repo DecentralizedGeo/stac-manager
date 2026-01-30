@@ -338,7 +338,7 @@ class OutputModule:
         # Add relative parent link (collection)
         item["links"].append({
             "rel": "parent",
-            "href": "../collections.json",
+            "href": "../collection.json",
             "type": "application/json"
         })
 
