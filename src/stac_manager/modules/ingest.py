@@ -227,7 +227,7 @@ class IngestModule:
         
         # Determine source type (explicit or auto-detect)
         source_type = self._determine_source_type(source_path)
-        logger.debug(f"Detected source_type: {source_type} for {source_path}")
+        self.logger.debug(f"Detected source_type: {source_type} for {source_path}")
         
         # Route to appropriate handler
         if source_type == "items_directory":
@@ -448,17 +448,17 @@ class IngestModule:
             # Handle FeatureCollection
             if isinstance(data, dict) and data.get("type") == "FeatureCollection":
                 items = data.get("features", [])
-                logger.info(f"Loading {len(items)} items from FeatureCollection in {file_path}")
+                self.logger.info(f"Loading {len(items)} items from FeatureCollection in {file_path}")
                 for item in items:
                     yield item
             # Handle array of items
             elif isinstance(data, list):
-                logger.info(f"Loading {len(data)} items from array in {file_path}")
+                self.logger.info(f"Loading {len(data)} items from array in {file_path}")
                 for item in data:
                     yield item
             # Handle single item
             else:
-                logger.info(f"Loading single item from {file_path}")
+                self.logger.info(f"Loading single item from {file_path}")
                 yield data
         except json.JSONDecodeError as e:
             raise DataProcessingError(
@@ -491,7 +491,7 @@ class IngestModule:
             table = await asyncio.to_thread(pq.read_table, str(file_path))
             items = table.to_pylist()
             
-            logger.info(f"Loading {len(items)} items from Parquet file {file_path}")
+            self.logger.info(f"Loading {len(items)} items from Parquet file {file_path}")
             
             for item in items:
                 yield item
