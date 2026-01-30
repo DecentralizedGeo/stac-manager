@@ -177,6 +177,37 @@ async def test_ingest_module_logs_info_messages():
                 f"Expected 'Ingest complete | total_items: 2' in INFO logs, got: {info_calls}"
 
 @pytest.mark.asyncio
+async def test_ingest_module_logs_debug_details():
+    """Test IngestModule logs DEBUG-level item details."""
+    mock_logger = MagicMock(spec=logging.Logger)
+    context = MockWorkflowContext.create()
+    
+    config = {"mode": "file", "source": "items.json", "format": "json"}
+    
+    with patch('stac_manager.modules.ingest.IngestModule._load_json_file') as mock_load:
+        async def async_gen(_):
+            yield {"id": "test-item-1", "collection": "test-collection"}
+            yield {"id": "test-item-2", "collection": "test-collection"}
+        mock_load.return_value = async_gen(None)
+        
+        with patch('pathlib.Path.exists', return_value=True), \
+             patch('pathlib.Path.is_file', return_value=True), \
+             patch('pathlib.Path.is_dir', return_value=False):
+            module = IngestModule(config)
+            module.set_logger(mock_logger)
+            
+            items = [item async for item in module.fetch(context)]
+            
+            # Verify DEBUG logs
+            debug_calls = [str(args[0]) for args, _ in mock_logger.debug.call_args_list]
+            
+            # Should log each fetched item
+            assert any("test-item-1" in call for call in debug_calls), \
+                f"Expected 'test-item-1' in DEBUG logs, got: {debug_calls}"
+            assert any("test-item-2" in call for call in debug_calls), \
+                f"Expected 'test-item-2' in DEBUG logs, got: {debug_calls}"
+
+@pytest.mark.asyncio
 async def test_transform_module_logs_enrichment():
     """Test that TransformModule logs enrichment details."""
     mock_logger = MagicMock(spec=logging.Logger)
