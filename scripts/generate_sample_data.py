@@ -179,7 +179,6 @@ def save_input_formats(input_data_dict: Dict[str, Dict], json_path: Path, csv_pa
 @click.option(
     '--collection',
     required=True,
-    default='sentinel-2-l2a',
     help='Collection ID to fetch (e.g., sentinel-2-l2a)'
 )
 @click.option(

@@ -169,23 +169,23 @@ def test_extract_collection_metadata():
 
 def test_generate_sidecar_data():
     """Test generating sidecar JSON and CSV from items."""
-    from scripts.generate_sample_data import generate_sidecar_data
+    from scripts.generate_sample_data import generate_input_data
     
     items = [
         {"id": "S2A_ITEM_1", "properties": {"eo:cloud_cover": 12.5}},
         {"id": "S2A_ITEM_2", "properties": {"eo:cloud_cover": 45.2}}
     ]
     
-    sidecar_dict = generate_sidecar_data(items)
+    sidecar_dict = generate_input_data(items)
     
     assert len(sidecar_dict) == 2
     assert sidecar_dict["S2A_ITEM_1"]["cloud_cover"] == 12.5
     assert sidecar_dict["S2A_ITEM_2"]["cloud_cover"] == 45.2
 
 
-def test_save_sidecar_formats(tmp_path):
+def test_save_input_formats(tmp_path):
     """Test saving sidecar data as JSON and CSV."""
-    from scripts.generate_sample_data import save_sidecar_formats
+    from scripts.generate_sample_data import save_input_formats
     
     sidecar_data = {
         "S2A_ITEM_1": {"cloud_cover": 12.5, "snow_cover": 0.0},
@@ -195,7 +195,7 @@ def test_save_sidecar_formats(tmp_path):
     json_path = tmp_path / "cloud-cover.json"
     csv_path = tmp_path / "cloud-cover.csv"
     
-    save_sidecar_formats(sidecar_data, json_path, csv_path)
+    save_input_formats(sidecar_data, json_path, csv_path)
     
     # Verify JSON
     assert json_path.exists()
