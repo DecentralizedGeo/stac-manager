@@ -14,13 +14,20 @@ The logging system is built around three key principles:
 You can control logging levels in your workflow YAML configuration.
 
 ### Global Configuration
-Set the default log level for the entire workflow in `settings`:
+Set the default log level and advanced options for the entire workflow in `settings`:
 
 ```yaml
 name: my-workflow
 settings:
   logging:
     level: INFO  # Options: DEBUG, INFO, WARNING, ERROR (Default: INFO)
+    output_format: text  # Options: text, json (Default: text)
+    progress_interval: 100  # Log "Processed N items" every N items (Default: 100)
+    
+    # Log Rotation Settings
+    file: logs/stac_manager.log
+    max_bytes: 10485760  # 10MB (Default)
+    backup_count: 5      # Keep 5 backup files (Default)
 steps:
   ...
 ```

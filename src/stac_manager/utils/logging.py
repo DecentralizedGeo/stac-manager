@@ -162,11 +162,14 @@ def setup_logger(config: dict) -> logging.Logger:
     try:
         log_path.parent.mkdir(parents=True, exist_ok=True)
         
-        # maxBytes=10MB, backupCount=5
+        # maxBytes=10MB (default), backupCount=5 (default)
+        max_bytes = log_config.get('max_bytes', 10 * 1024 * 1024)
+        backup_count = log_config.get('backup_count', 5)
+        
         fh = RotatingFileHandler(
             log_path, 
-            maxBytes=10 * 1024 * 1024, 
-            backupCount=5, 
+            maxBytes=max_bytes, 
+            backupCount=backup_count, 
             encoding='utf-8'
         )
         

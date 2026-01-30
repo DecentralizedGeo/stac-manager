@@ -448,8 +448,13 @@ class StacManager:
                 await bundler.bundle(item, context)
                 count += 1
                 
-                if count % 100 == 0:
-                    self.logger.debug(f"Processed {count} items through '{step_id}'")
+                # Get progress interval from settings (default: 100)
+                settings = self.workflow.settings or {}
+                log_settings = settings.get('logging', {})
+                progress_interval = log_settings.get('progress_interval', 100)
+
+                if count % progress_interval == 0:
+                    self.logger.info(f"Processed {count} items through '{step_id}'")
                     
             except Exception as e:
                 self.logger.warning(
