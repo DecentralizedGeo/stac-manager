@@ -187,6 +187,8 @@ def run_workflow(ctx, config_file, checkpoint_dir, dry_run):
         click.echo(click.style(f"✗ Configuration error: {e}", fg='red'), err=True)
         sys.exit(1)
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         click.echo(click.style(f"✗ Execution failed: {e}", fg='red'), err=True)
         sys.exit(1)
 
