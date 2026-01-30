@@ -94,7 +94,6 @@ async def test_update_module_logs_operations():
     """Test that UpdateModule logs modification details."""
     mock_logger = MagicMock(spec=logging.Logger)
     context = MockWorkflowContext.create()
-    context.logger = mock_logger
     
     config = {
         "updates": {"properties.updated": True}
@@ -103,15 +102,45 @@ async def test_update_module_logs_operations():
     from stac_manager.modules.update import UpdateModule
     module = UpdateModule(config)
     
+    # Inject the mock logger (UpdateModule now uses self.logger, not context.logger)
+    module.set_logger(mock_logger)
+    
     # Process item
     item = {"id": "test-item", "properties": {}}
     module.modify(item, context)
     
     # Verify logs
-    # Expecting DEBUG log about modification
+    # Expecting DEBUG log about processing item and INFO log about applying updates
     debug_calls = [args[0] for args, _ in mock_logger.debug.call_args_list]
-    assert any("test-item" in str(call) for call in debug_calls)
-    assert any("fields" in str(call) or "updated" in str(call) for call in debug_calls)
+    info_calls = [args[0] for args, _ in mock_logger.info.call_args_list]
+    
+    # Check for DEBUG log with item ID
+    assert any("test-item" in str(call) for call in debug_calls), \
+        f"Expected 'test-item' in DEBUG logs, got: {debug_calls}"
+    
+    # Check for INFO log about applying updates
+    assert any("Applied updates" in str(call) and "test-item" in str(call) for call in info_calls), \
+        f"Expected 'Applied updates' with 'test-item' in INFO logs, got: {info_calls}"
+
+@pytest.mark.asyncio
+async def test_ingest_module_accepts_injected_logger():
+    """Test IngestModule has set_logger method and uses it."""
+    mock_logger = MagicMock(spec=logging.Logger)
+    context = MockWorkflowContext.create()
+    
+    config = {"mode": "file", "source": "items.json", "format": "json"}
+    
+    with patch('pathlib.Path.exists', return_value=True):
+        module = IngestModule(config)
+        
+        # Module should have set_logger method
+        assert hasattr(module, 'set_logger'), "IngestModule missing set_logger method"
+        
+        # Inject logger
+        module.set_logger(mock_logger)
+        
+        # Verify logger was set
+        assert module.logger is mock_logger
 
 @pytest.mark.asyncio
 async def test_transform_module_logs_enrichment():
