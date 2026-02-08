@@ -205,6 +205,11 @@ class IngestModule:
         count = 0
         if self.config.mode == "file":
             async for item in self._fetch_from_file():
+                # Check limit BEFORE yielding
+                if self.config.max_items is not None and count >= self.config.max_items:
+                    self.logger.info(f"Reached max_items limit: {self.config.max_items}")
+                    break
+
                 if item is None:
                     continue
                 self.logger.debug(f"Fetched item {item.get('id', 'unknown')}")
