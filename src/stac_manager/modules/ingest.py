@@ -553,7 +553,7 @@ class IngestModule:
             
             # Execute search
             search = client.search(**search_params)
-            
+
             # items_as_dicts() is a regular iterator, not async
             # Wrap in async iterator for consistency
             for item in search.items_as_dicts():
@@ -563,6 +563,9 @@ class IngestModule:
             raise DataProcessingError(
                 f"Failed to connect to STAC API at {self.config.source}: {e}"
             ) from e
+        except DataProcessingError:
+            # Re-raise our own exceptions
+            raise
         except Exception as e:
             raise DataProcessingError(
                 f"Failed to fetch from STAC API: {e}"
