@@ -150,3 +150,46 @@ def test_expand_wildcard_removal_paths_nested_wildcard():
     assert ("assets", "blue", "alternate", "ipfs") in result
     assert ("assets", "red", "alternate", "ipfs") in result
 
+
+def test_expand_wildcard_removal_paths_multiple_wildcards() -> None:
+    """expand_wildcard_removal_paths expands multiple wildcards in a path."""
+    paths = ["assets.*.alternate.*.name"]
+    item = {
+        "assets": {
+            "blue": {
+                "alternate": {
+                    "ipfs": {"name": "ipfs-name"},
+                    "filecoin": {"name": "filecoin-name"}
+                }
+            },
+            "red": {
+                "alternate": {
+                    "ipfs": {"name": "red-ipfs"}
+                }
+            }
+        }
+    }
+
+    result = expand_wildcard_removal_paths(paths, item)
+
+    assert len(result) == 3
+    assert ("assets", "blue", "alternate", "ipfs", "name") in result
+    assert ("assets", "blue", "alternate", "filecoin", "name") in result
+    assert ("assets", "red", "alternate", "ipfs", "name") in result
+
+
+def test_expand_wildcard_removal_paths_missing_intermediate_key() -> None:
+    """expand_wildcard_removal_paths skips paths with missing intermediate keys."""
+    paths = ["assets.*.alternate.ipfs"]
+    item = {
+        "assets": {
+            "blue": {"alternate": {"ipfs": {}, "s3": {}}},
+            "red": {"href": "s3://..."}
+        }
+    }
+
+    result = expand_wildcard_removal_paths(paths, item)
+
+    assert len(result) == 1
+    assert ("assets", "blue", "alternate", "ipfs") in result
+
