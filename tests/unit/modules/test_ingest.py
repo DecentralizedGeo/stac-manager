@@ -250,6 +250,62 @@ async def test_ingest_api_filters_query():
 
 
 @pytest.mark.asyncio
+async def test_ingest_api_nonexistent_collection():
+    """IngestModule raises DataProcessingError when collection does not exist."""
+    mock_client = MagicMock()
+    # Mock get_collection to raise an exception for non-existent collection
+    # pystac_client may raise various exceptions, so we use a generic approach
+    mock_client.get_collection.side_effect = Exception("Collection 'nonexistent-collection' not found")
+    
+    config = {
+        "mode": "api",
+        "source": "https://example.com/stac",
+        "collection_id": "nonexistent-collection"
+    }
+    
+    from stac_manager.exceptions import DataProcessingError
+    with patch('pystac_client.Client.open', return_value=mock_client):
+        module = IngestModule(config)
+        context = MockWorkflowContext.create()
+        
+        with pytest.raises(DataProcessingError, match="Collection 'nonexistent-collection' not found"):
+            _ = [item async for item in module.fetch(context)]
+
+
+
+@pytest.mark.asyncio
+async def test_ingest_api_empty_collection():
+    """IngestModule returns 0 items for existing but empty collection."""
+    mock_client = MagicMock()
+    # Mock get_collection to succeed (collection exists)
+    mock_collection = MagicMock()
+    mock_collection.id = "empty-collection"
+    mock_client.get_collection.return_value = mock_collection
+    
+    # Mock search to return empty results
+    mock_search = MagicMock()
+    mock_search.items_as_dicts.return_value = iter([])  # Empty iterator
+    mock_client.search.return_value = mock_search
+    
+    config = {
+        "mode": "api",
+        "source": "https://example.com/stac",
+        "collection_id": "empty-collection"
+    }
+    
+    with patch('pystac_client.Client.open', return_value=mock_client):
+        module = IngestModule(config)
+        context = MockWorkflowContext.create()
+        
+        # Should not raise error, just return empty list
+        results = [item async for item in module.fetch(context)]
+    
+    assert len(results) == 0
+    # Verify collection existence was checked
+    mock_client.get_collection.assert_called_once_with("empty-collection")
+
+
+@pytest.mark.asyncio
 async def test_ingest_api_connection_error():
     """IngestModule raises DataProcessingError on connection failures."""
     mock_client = MagicMock()

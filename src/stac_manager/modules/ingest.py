@@ -521,6 +521,16 @@ class IngestModule:
         try:
             # Open STAC API client
             client = pystac_client.Client.open(self.config.source)
+
+            # Verify collection exists before searching
+            try:
+                collection = client.get_collection(collection_id)
+                self.logger.debug(f"Verified collection exists: {collection_id}")
+            except Exception as e:
+                # Wrap any exception from get_collection as DataProcessingError
+                raise DataProcessingError(
+                    f"Collection '{collection_id}' not found at {self.config.source}: {e}"
+                ) from e
             
             # Build search parameters
             search_params = {
