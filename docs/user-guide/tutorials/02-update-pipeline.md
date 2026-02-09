@@ -46,7 +46,7 @@ steps:
     depends_on: [ingest]
     config:
       mode: merge
-      patch_file: samples/sentinel-2-l2a-api/patch-data/updates.json
+      patch_file: samples/sentinel-2-l2a-api/input-data/updates.json
       create_missing_paths: true
       auto_update_timestamp: true
 

@@ -1,0 +1,162 @@
+{
+  "S2A_MSIL2A_20260209T075441_R135_T39UXV_20260209T084407": {
+    "properties": {
+      "processed_by": "stac-manager",
+      "processing_date": "2026-02-09T12:00:00Z",
+      "processing_version": "2.0",
+      "workflow_id": "update-pipeline-v1"
+    }
+  },
+  "S2A_MSIL2A_20260209T075441_R135_T39UXB_20260209T084407": {
+    "properties": {
+      "processed_by": "stac-manager",
+      "processing_date": "2026-02-09T12:00:00Z",
+      "processing_version": "2.0",
+      "workflow_id": "update-pipeline-v1"
+    }
+  },
+  "S2A_MSIL2A_20260209T075441_R135_T39UXA_20260209T084407": {
+    "properties": {
+      "processed_by": "stac-manager",
+      "processing_date": "2026-02-09T12:00:00Z",
+      "processing_version": "2.0",
+      "workflow_id": "update-pipeline-v1"
+    }
+  },
+  "S2A_MSIL2A_20260209T075441_R135_T39UWB_20260209T084407": {
+    "properties": {
+      "processed_by": "stac-manager",
+      "processing_date": "2026-02-09T12:00:00Z",
+      "processing_version": "2.0",
+      "workflow_id": "update-pipeline-v1"
+    }
+  },
+  "S2A_MSIL2A_20260209T075441_R135_T39UWA_20260209T084407": {
+    "properties": {
+      "processed_by": "stac-manager",
+      "processing_date": "2026-02-09T12:00:00Z",
+      "processing_version": "2.0",
+      "workflow_id": "update-pipeline-v1"
+    }
+  },
+  "S2A_MSIL2A_20260209T075441_R135_T39UVB_20260209T084407": {
+    "properties": {
+      "processed_by": "stac-manager",
+      "processing_date": "2026-02-09T12:00:00Z",
+      "processing_version": "2.0",
+      "workflow_id": "update-pipeline-v1"
+    }
+  },
+  "S2A_MSIL2A_20260209T075441_R135_T39UVA_20260209T084407": {
+    "properties": {
+      "processed_by": "stac-manager",
+      "processing_date": "2026-02-09T12:00:00Z",
+      "processing_version": "2.0",
+      "workflow_id": "update-pipeline-v1"
+    }
+  },
+  "S2A_MSIL2A_20260209T075441_R135_T39UUB_20260209T084407": {
+    "properties": {
+      "processed_by": "stac-manager",
+      "processing_date": "2026-02-09T12:00:00Z",
+      "processing_version": "2.0",
+      "workflow_id": "update-pipeline-v1"
+    }
+  },
+  "S2A_MSIL2A_20260209T075441_R135_T39UUA_20260209T084407": {
+    "properties": {
+      "processed_by": "stac-manager",
+      "processing_date": "2026-02-09T12:00:00Z",
+      "processing_version": "2.0",
+      "workflow_id": "update-pipeline-v1"
+    }
+  },
+  "S2A_MSIL2A_20260209T075241_R135_T40VEP_20260209T084912": {
+    "properties": {
+      "processed_by": "stac-manager",
+      "processing_date": "2026-02-09T12:00:00Z",
+      "processing_version": "2.0",
+      "workflow_id": "update-pipeline-v1"
+    }
+  },
+  "S2A_MSIL2A_20260209T075241_R135_T40VEN_20260209T084912": {
+    "properties": {
+      "processed_by": "stac-manager",
+      "processing_date": "2026-02-09T12:00:00Z",
+      "processing_version": "2.0",
+      "workflow_id": "update-pipeline-v1"
+    }
+  },
+  "S2A_MSIL2A_20260209T075241_R135_T40VDQ_20260209T084912": {
+    "properties": {
+      "processed_by": "stac-manager",
+      "processing_date": "2026-02-09T12:00:00Z",
+      "processing_version": "2.0",
+      "workflow_id": "update-pipeline-v1"
+    }
+  },
+  "S2A_MSIL2A_20260209T075241_R135_T40VDP_20260209T084912": {
+    "properties": {
+      "processed_by": "stac-manager",
+      "processing_date": "2026-02-09T12:00:00Z",
+      "processing_version": "2.0",
+      "workflow_id": "update-pipeline-v1"
+    }
+  },
+  "S2A_MSIL2A_20260209T075241_R135_T40VDN_20260209T084912": {
+    "properties": {
+      "processed_by": "stac-manager",
+      "processing_date": "2026-02-09T12:00:00Z",
+      "processing_version": "2.0",
+      "workflow_id": "update-pipeline-v1"
+    }
+  },
+  "S2A_MSIL2A_20260209T075241_R135_T40VCQ_20260209T084912": {
+    "properties": {
+      "processed_by": "stac-manager",
+      "processing_date": "2026-02-09T12:00:00Z",
+      "processing_version": "2.0",
+      "workflow_id": "update-pipeline-v1"
+    }
+  },
+  "S2A_MSIL2A_20260209T075241_R135_T40VCP_20260209T084912": {
+    "properties": {
+      "processed_by": "stac-manager",
+      "processing_date": "2026-02-09T12:00:00Z",
+      "processing_version": "2.0",
+      "workflow_id": "update-pipeline-v1"
+    }
+  },
+  "S2A_MSIL2A_20260209T075241_R135_T40VCN_20260209T084912": {
+    "properties": {
+      "processed_by": "stac-manager",
+      "processing_date": "2026-02-09T12:00:00Z",
+      "processing_version": "2.0",
+      "workflow_id": "update-pipeline-v1"
+    }
+  },
+  "S2A_MSIL2A_20260209T075241_R135_T39VXK_20260209T084912": {
+    "properties": {
+      "processed_by": "stac-manager",
+      "processing_date": "2026-02-09T12:00:00Z",
+      "processing_version": "2.0",
+      "workflow_id": "update-pipeline-v1"
+    }
+  },
+  "S2A_MSIL2A_20260209T075241_R135_T39VXJ_20260209T084912": {
+    "properties": {
+      "processed_by": "stac-manager",
+      "processing_date": "2026-02-09T12:00:00Z",
+      "processing_version": "2.0",
+      "workflow_id": "update-pipeline-v1"
+    }
+  },
+  "S2A_MSIL2A_20260209T075241_R135_T39VWJ_20260209T084912": {
+    "properties": {
+      "processed_by": "stac-manager",
+      "processing_date": "2026-02-09T12:00:00Z",
+      "processing_version": "2.0",
+      "workflow_id": "update-pipeline-v1"
+    }
+  }
+}
