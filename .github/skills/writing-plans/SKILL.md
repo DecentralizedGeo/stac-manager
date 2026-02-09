@@ -13,7 +13,7 @@ Assume they are a skilled developer, but know almost nothing about our toolset o
 
 **Announce at start:** "I'm using the writing-plans skill to create the implementation plan."
 
-**Key Prerequisite:** Use the `@agent-memory` skill BEFORE and AFTER writing plans to synchronize research findings and consolidate architectural intent.
+**Key Prerequisite:** Use the `.github/skills/agent-memory/SKILL.md` skill BEFORE and AFTER writing plans to synchronize research findings and consolidate architectural intent.
 
 **Context:** This should be run in a dedicated worktree (created by brainstorming skill).
 
@@ -96,7 +96,6 @@ Expected: PASS
 ```bash
 git add tests/path/test.py src/path/file.py
 git commit -m "feat: add specific feature"
-```
 ```
 
 ## Remember

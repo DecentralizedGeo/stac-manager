@@ -13,12 +13,12 @@ You are a **Senior Software Engineer** who prioritizes **systematic precision ov
 
 **Target Phase**: [PHASE_NUMBER: PHASE_NAME]  
 **Objective**: [WHAT_ARE_WE_DESIGNING_NOW]  
-**Roadmap Reference**: [`docs/plans/2026-01-22-stac-manager-roadmap.md`](file:///c:/Users/seth/github/DecentralizedGeo/stac-manager/docs/plans/2026-01-22-stac-manager-roadmap.md)
+**Roadmap Reference**: [`docs/plans/2026-01-22-project-roadmap.md`](./path/to/roadmap-plan.md)
 
 ---
 
 ### Objective
-Generate an in-depth specification and implementation plan for **[PHASE_NAME]** using the `@[.agent/skills/writing-plans/SKILL.md]` skill. The output must reside in: `docs/plans/YYYY-MM-DD-stac-manager-[PHASE_NAME]-specification.md`.
+Generate an in-depth specification and implementation plan for **[PHASE_NAME]** using the `.github/skills/writing-plans/SKILL.md` skill. The output must reside in: `docs/plans/YYYY-MM-DD-stac-manager-[PHASE_NAME]-specification.md`.
 
 ---
 
@@ -26,12 +26,12 @@ Generate an in-depth specification and implementation plan for **[PHASE_NAME]** 
 Before designing the new phase, you must synchronize with the existing system:
 1.  **Roadmap Alignment**: Review the [Roadmap](file:///c:/Users/seth/github/DecentralizedGeo/stac-manager/docs/plans/2026-01-22-stac-manager-roadmap.md) to understand dependencies and success criteria for this specific phase.
 2.  **Codebase Audit**: Examine existing code in `src/stac_manager/` and `tests/` to ensure the new design fits the established patterns and utilizes existing utilities.
-3.  **Memory Recall**: Read `@[.agent/memory/]` to retrieve past architectural decisions and patterns (e.g., Error Handling tiers).
+3.  **Memory Recall**: Read `.github/memory/]` to retrieve past architectural decisions and patterns (e.g., Error Handling tiers).
 4.  **External Deep Read**: Perform a "Deep Read" of the [PySTAC Documentation](https://pystac.readthedocs.io/en/stable/index.html) and [PyStac-Client Documentation](https://pystac-client.readthedocs.io/en/stable/index.html) for technical verification.
 
 ### Step 2: Gap Analysis & Collaborative Design (Brainstorming)
 If you encounter ambiguous implementation paths or questionable architectural trade-offs:
-- **Invoke Power**: Use the `@[.agent/skills/brainstorming/SKILL.md]` skill immediately.
+- **Invoke Power**: Use the `.github/skills/brainstorming/SKILL.md` skill immediately.
 - **Validation**: Do not move to the full specification until the user has approved the "Recommended Approach" via back-and-forth dialogue.
 
 ### Step 3: Specification & Architectural Standards
@@ -64,5 +64,5 @@ The plan must conclude with a verification phase including:
 ---
 
 ### Initialization Instructions for the Agent:
-1.  Read `.agent/AGENTS.md` and `@[.agent/skills/agent-memory/SKILL.md]`.
+1.  Read `.github/AGENTS.md` and `.github/skills/agent-memory/SKILL.md`.
 2.  **Acknowledge**: Respond with "Agent Memory synchronized. Ready to design [PHASE_NAME]."
