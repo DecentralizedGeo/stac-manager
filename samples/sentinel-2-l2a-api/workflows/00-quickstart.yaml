@@ -1,0 +1,23 @@
+name: quickstart-pipeline
+
+steps:
+- id: ingest
+  module: IngestModule
+  config:
+    mode: file
+    source: samples/sentinel-2-l2a-api/sample-data/items.json
+    collection_id: sentinel-2-l2a
+
+- id: validate
+  module: ValidateModule
+  depends_on: [ ingest ]
+  config:
+    strict: true
+
+- id: output
+  module: OutputModule
+  depends_on: [ validate ]
+  config:
+    base_dir: ./outputs
+    format: json
+    collection_id: sentinel-2-l2a
