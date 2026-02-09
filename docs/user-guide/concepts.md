@@ -309,8 +309,17 @@ S2A_MSI..._001,15.3,0.95
 
 1. Looks up item ID in input data
 2. Applies JMESPath queries from `field_mapping` values to input entry
-3. Merges results into `item.properties` using `field_mapping` keys
+3. Merges results into the target paths specified by `field_mapping` keys
 
+> Note: You can use `assets.*` in `field_mapping` keys to map the same input fields to all assets, matching the wildcard behavior in ExtensionModule.
+>
+> ```yaml
+>  field_mapping:
+>  assets.*.title: "preferred.title"
+>  assets.*.description: "preferred.description"
+>  assets.*.file:size: "preferred.file_size"
+> ```
+>
 Note: CSV support uses PyArrow for efficient type inference and loading. The `input_join_key` is forced to a string type to prevent ID mutation.
 
 **Output**: Enriched items with merged data
