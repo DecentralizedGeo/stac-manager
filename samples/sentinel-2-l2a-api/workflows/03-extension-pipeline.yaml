@@ -30,7 +30,7 @@ steps:
   module: IngestModule
   config:
     mode: file
-    source: samples/sentinel-2-l2a-api/data/items.json
+    source: samples/sentinel-2-l2a-api/sample-data/items.json
     collection_id: sentinel-2-l2a
 
 # Step 2: Add Alternate Assets STAC extension

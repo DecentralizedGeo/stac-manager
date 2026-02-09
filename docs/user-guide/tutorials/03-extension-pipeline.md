@@ -39,7 +39,7 @@ steps:
     module: IngestModule
     config:
       mode: file
-      source: samples/sentinel-2-l2a-api/data/items.json
+      source: samples/sentinel-2-l2a-api/sample-data/items.json
       collection_id: sentinel-2-l2a
 
   - id: extend
@@ -600,7 +600,7 @@ python scripts/generate_sample_data.py \
 
 ```bash
 # Check item IDs
-cat samples/sentinel-2-l2a-api/data/items.json | jq '.[] | .id' | head -3
+cat samples/sentinel-2-l2a-api/sample-data/items.json | jq '.[] | .id' | head -3
 
 # Check input keys (dict format)
 cat samples/sentinel-2-l2a-api/input-data/cloud-cover.json | jq 'keys' | head -3
