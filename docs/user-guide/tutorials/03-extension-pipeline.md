@@ -80,7 +80,7 @@ steps:
 
 ### Pipeline Flow
 
-```
+```text
 IngestModule (Local File)
         ↓
    20 Items
@@ -112,7 +112,7 @@ stac-manager run-workflow samples/sentinel-2-l2a-api/workflows/03-extension-pipe
 
 **Expected output:**
 
-```
+```text
 Starting workflow: extension-pipeline
 [ingest] Loaded 20 items from file
 [extend] Adding extension: alternate-assets
@@ -466,7 +466,6 @@ Extract nested fields from input data using JMESPath queries:
 }
 ```
 
-
 ---
 
 ## Comparing Pipeline Outputs
@@ -657,4 +656,3 @@ If using list format, ensure `input_join_key` points to the correct field (defau
 - [Projection Extension](https://github.com/stac-extensions/projection)
 - [View Extension](https://github.com/stac-extensions/view)
 - [Complete Extension List](https://github.com/stac-extensions)
-
