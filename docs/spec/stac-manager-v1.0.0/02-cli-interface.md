@@ -40,11 +40,11 @@ Static analysis of a workflow configuration. Checks for valid module names, requ
 stac-manager validate-workflow --config WORKFLOW_FILE.yaml
 ```
 
-### `discover`
-Ad-hoc command wrapping the Discovery Module.
+### `ingest`
+Ad-hoc command wrapping the Ingest Module.
 
 ```bash
-stac-manager discover --catalog-url URL [--output FILE]
+stac-manager ingest --collection-id ID [--catalog-url URL] [--source-file FILE]
 ```
 
 ### `validate-stac`
@@ -56,10 +56,3 @@ stac-manager validate-stac --input ./data/items/ --recursive
 - `--strict`: Return non-zero exit code on warnings.
 - `--extensions URL`: Validate against specific extension schemas.
 - `--report PATH`: Write validation report to JSON file (for CI/automated checking).
-
-### `list-extensions`
-Show available extensions in the registry.
-
-```bash
-stac-manager list-extensions
-```

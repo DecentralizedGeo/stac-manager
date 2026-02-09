@@ -160,7 +160,6 @@ for page in search.pages():
 |:-------|:--------|:------|
 | **IngestModule** | Async (`aiohttp`) | 90% I/O bound. Use semaphores for concurrency control. |
 | **TransformModule** | Sync | CPU-bound mapping. Fast enough inline. |
-| **ScaffoldModule** | Sync | Object creation is cheap. |
 | **OutputModule** | Parallel (ThreadPool) | File I/O benefits from threads. Use atomic writes. |
 | **ValidateModule** | Sync or ProcessPool | `jsonschema` is CPU-bound. Benchmark before optimizing. |
 

@@ -48,7 +48,6 @@ The `CheckpointManager` handles the reading and writing of state. It abstracts t
 ### 4.1 Interface
 
 ```python
-import pandas as pd
 from pathlib import Path
 from typing import TypedDict
 
@@ -68,28 +67,58 @@ class CheckpointManager:
 
     def __init__(self, directory: Path, workflow_id: str, step_id: str | None = None):
         """
-        Initialize manager and load existing state.
+        Initialize manager and load existing checkpoint state.
         
         Args:
             directory: Base checkpoint directory
             workflow_id: Unique workflow identifier
             step_id: Step identifier (optional for global checkpoint manager)
+            
+        Behavior:
+            - Creates checkpoint directory if missing
+            - Loads all `*.parquet` files from checkpoint path
+            - Builds in-memory set of processed `item_id` values for O(1) lookup
+            - Deduplicates item_ids if found in multiple partition files
         """
         ...
 
     def contains(self, item_id: str) -> bool:
-        """Check if an item has already been processed."""
-        ...
-
-    def save(self, new_records: list[CheckpointRecord]):
         """
-        Atomically append new records to the checkpoint.
+        Check if an item has already been processed.
         
         Args:
-            new_records: list of CheckpointRecord dicts
+            item_id: STAC Item ID to check
             
-        Implementation Note:
-            MUST use atomic write-rename or partitioned write patterns.
+        Returns:
+            True if item_id exists in the checkpoint state (O(1) lookup)
+        """
+        ...
+
+    def save(self, new_records: list[CheckpointRecord]) -> None:
+        """
+        Atomically append new records to the checkpoint using partitioned writes.
+        
+        Args:
+            new_records: List of CheckpointRecord dicts to persist
+            
+        Implementation Pattern (Atomic Write):
+            1. Generate unique filename: `checkpoint_{timestamp}_{uuid}.parquet`
+            2. Write records to temporary file: `.tmp/{filename}`
+            3. Move temp file to checkpoint directory atomically
+            4. Update in-memory processed set with new item_ids
+            
+        Note:
+            Uses partitioned batches to avoid rewriting large files.
+            Each call creates a new partition file in the checkpoint directory.
+        """
+        ...
+    
+    def get_checkpoint_path(self) -> Path:
+        """
+        Return full path to checkpoint directory for this workflow/step.
+        
+        Returns:
+            Path object: {directory}/{workflow_id}/{step_id or "global"}/
         """
         ...
 ```

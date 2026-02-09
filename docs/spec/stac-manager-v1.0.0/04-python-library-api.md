@@ -51,9 +51,10 @@ config = {
     "name": "programmatic-ingest",
     "steps": [
         {
-            "id": "discover",
-            "module": "DiscoveryModule",
+            "id": "ingest",
+            "module": "IngestModule",
             "config": {
+                "collection_id": "landsat-c2-l2",
                 "catalog_url": "https://cmr.earthdata.nasa.gov/stac/v1"
             }
         }
@@ -75,7 +76,7 @@ Developers can use individual modules directly for custom script logic without t
 
 ```python
 import asyncio
-from stac_manager.modules import DiscoveryModule, IngestModule
+from stac_manager.modules import IngestModule, TransformModule, OutputModule
 from stac_manager.core import WorkflowContext, FailureCollector, CheckpointManager
 
 async def custom_pipeline():
@@ -89,27 +90,28 @@ async def custom_pipeline():
         data={}
     )
 
-    # 1. Fetcher (Discovery)
-    discover = DiscoveryModule({"catalog_url": "..."})
-    collection_stream = await discover.fetch(ctx)
+    # 1. Fetcher (Ingest)
+    ingest = IngestModule({
+        "collection_id": "landsat-c2-l2",
+        "catalog_url": "..."
+    })
+    item_stream = await ingest.fetch(ctx)
     
     # 2. Sequential Processing
-    async for collection_dict in collection_stream:
-        # Ingest Fetcher
-        ingest = IngestModule({"limit": 50})
-        item_stream = await ingest.fetch(ctx)
+    async for item_dict in item_stream:
+        # Transform Modifier (Sync)
+        transform = TransformModule({
+            "input_file": "./input.json",
+            "field_mapping": {"properties.new_field": "source_field"}
+        })
+        item_dict = transform.modify(item_dict, ctx)
         
-        async for item_dict in item_stream:
-            # Transform Modifier (Sync)
-            transform = TransformModule({"schema": ...})
-            item_dict = transform.modify(item_dict, ctx)
-            
-            # Output Bundler (Sync)
-            output = OutputModule({"output_path": "..."})
-            output.bundle(item_dict, ctx)
-        
-        # Finalize per collection
-        result = output.finalize(ctx)
+        # Output Bundler (Sync)
+        output = OutputModule({"output_path": "..."})
+        output.bundle(item_dict, ctx)
+    
+    # Finalize
+    result = output.finalize(ctx)
     return result
 ```
 

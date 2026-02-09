@@ -1,0 +1,82 @@
+{
+  "S2A_MSIL2A_20260209T075441_R135_T39UXV_20260209T084407": {
+    "cloud_cover": 100.0,
+    "snow_cover": 0.0
+  },
+  "S2A_MSIL2A_20260209T075441_R135_T39UXB_20260209T084407": {
+    "cloud_cover": 99.995869,
+    "snow_cover": 0.003856
+  },
+  "S2A_MSIL2A_20260209T075441_R135_T39UXA_20260209T084407": {
+    "cloud_cover": 99.997628,
+    "snow_cover": 7e-06
+  },
+  "S2A_MSIL2A_20260209T075441_R135_T39UWB_20260209T084407": {
+    "cloud_cover": 98.630685,
+    "snow_cover": 0.00064
+  },
+  "S2A_MSIL2A_20260209T075441_R135_T39UWA_20260209T084407": {
+    "cloud_cover": 99.989295,
+    "snow_cover": 0.001611
+  },
+  "S2A_MSIL2A_20260209T075441_R135_T39UVB_20260209T084407": {
+    "cloud_cover": 89.836574,
+    "snow_cover": 9.667616
+  },
+  "S2A_MSIL2A_20260209T075441_R135_T39UVA_20260209T084407": {
+    "cloud_cover": 95.103461,
+    "snow_cover": 0.061498
+  },
+  "S2A_MSIL2A_20260209T075441_R135_T39UUB_20260209T084407": {
+    "cloud_cover": 74.289864,
+    "snow_cover": 24.900398
+  },
+  "S2A_MSIL2A_20260209T075441_R135_T39UUA_20260209T084407": {
+    "cloud_cover": 99.845177,
+    "snow_cover": 0.002695
+  },
+  "S2A_MSIL2A_20260209T075241_R135_T40VEP_20260209T084912": {
+    "cloud_cover": 56.16886,
+    "snow_cover": 36.760187
+  },
+  "S2A_MSIL2A_20260209T075241_R135_T40VEN_20260209T084912": {
+    "cloud_cover": 96.190536,
+    "snow_cover": 0.000209
+  },
+  "S2A_MSIL2A_20260209T075241_R135_T40VDQ_20260209T084912": {
+    "cloud_cover": 42.333332,
+    "snow_cover": 37.355843
+  },
+  "S2A_MSIL2A_20260209T075241_R135_T40VDP_20260209T084912": {
+    "cloud_cover": 31.732914,
+    "snow_cover": 52.735418
+  },
+  "S2A_MSIL2A_20260209T075241_R135_T40VDN_20260209T084912": {
+    "cloud_cover": 57.849479,
+    "snow_cover": 32.464093
+  },
+  "S2A_MSIL2A_20260209T075241_R135_T40VCQ_20260209T084912": {
+    "cloud_cover": 1.089081,
+    "snow_cover": 93.533564
+  },
+  "S2A_MSIL2A_20260209T075241_R135_T40VCP_20260209T084912": {
+    "cloud_cover": 21.8578,
+    "snow_cover": 67.306584
+  },
+  "S2A_MSIL2A_20260209T075241_R135_T40VCN_20260209T084912": {
+    "cloud_cover": 0.563499,
+    "snow_cover": 94.787741
+  },
+  "S2A_MSIL2A_20260209T075241_R135_T39VXK_20260209T084912": {
+    "cloud_cover": 1.244485,
+    "snow_cover": 93.704891
+  },
+  "S2A_MSIL2A_20260209T075241_R135_T39VXJ_20260209T084912": {
+    "cloud_cover": 24.781284,
+    "snow_cover": 66.093022
+  },
+  "S2A_MSIL2A_20260209T075241_R135_T39VWJ_20260209T084912": {
+    "cloud_cover": 41.042989,
+    "snow_cover": 46.265918
+  }
+}

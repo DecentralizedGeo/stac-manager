@@ -1,6 +1,6 @@
 # StacManager System Visualization
 
-This diagram illustrates how the `StacManager` orchestrator is instantiated, builds the pipeline, and executes the data flow through the requested steps: `discovery -> ingest -> apply extension -> update -> validate -> output`.
+This diagram illustrates how the `StacManager` orchestrator is instantiated, builds the pipeline, and executes the data flow through the requested steps: `ingest -> apply extension -> update -> validate -> output`.
 
 ```mermaid
 sequenceDiagram
@@ -26,32 +26,18 @@ sequenceDiagram
 
     SM->>CFG: build_dag(steps)
     activate CFG
-    Note right of CFG: Resolves dependencies:<br/>discover -> ingest -> ext -> update -> validate -> output
-    CFG-->>SM: execution_levels = [[discover], [ingest], [ext], [update], [validate], [output]]
+    Note right of CFG: Resolves dependencies:<br/>ingest -> ext -> update -> validate -> output
+    CFG-->>SM: execution_levels = [[ingest], [ext], [update], [validate], [output]]
     deactivate CFG
 
     Note over SM, DATA: 2. Pipeline Execution (Level by Level)
 
-    %% LEVEL 1: DISCOVERY
-    rect rgb(240, 248, 255)
-    Note right of SM: Level 1: Discovery (Fetcher)
-    SM->>MOD: _import_module("DiscoveryModule")
-    SM->>MOD: __init__(step_config)
-    SM->>MOD: fetch(context)
-    activate MOD
-    MOD-->>SM: yield Stream[Collection]
-    deactivate MOD
-    SM->>DATA: Store "discover": Stream[Collection]
-    end
-
-    %% LEVEL 2: INGEST
+    %% LEVEL 1: INGEST
     rect rgb(255, 250, 240)
-    Note right of SM: Level 2: Ingest (Fetcher/Consumer)
+    Note right of SM: Level 1: Ingest (Source)
     SM->>MOD: _import_module("IngestModule")
     SM->>MOD: __init__(step_config)
-    SM->>DATA: Get input from "discover"
-    DATA-->>SM: Stream[Collection]
-    SM->>MOD: fetch(context) (Consumes Discovery Stream)
+    SM->>MOD: fetch(context)
     activate MOD
     MOD-->>SM: yield Stream[Item]
     deactivate MOD

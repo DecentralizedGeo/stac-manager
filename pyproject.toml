@@ -1,0 +1,35 @@
+[tool.poetry]
+name = "stac-manager"
+version = "0.1.0"
+description = "Modular STAC pipeline manager"
+authors = ["DecentralizedGeo"]
+packages = [{include = "stac_manager", from = "src"}]
+
+[tool.poetry.scripts]
+stac-manager = "stac_manager.cli:cli"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+pystac = "^1.10.0"
+pystac-client = "^0.7.0"
+stac-validator = "^3.3.0"
+stac-geoparquet = "^0.4.0"
+aiohttp = "^3.9.0"
+pydantic = "^2.5.0"
+click = "^8.1.0"
+pyyaml = "^6.0"
+jmespath = "^1.0.0"
+requests-mock = "^1.12.1"
+pyarrow = "^14.0.0"
+numpy = "<2"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0.0"
+pytest-asyncio = "^0.23.0"
+mypy = "^1.8.0"
+black = "^24.0.0"
+ruff = "^0.15.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

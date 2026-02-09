@@ -6,83 +6,138 @@
 ---
 
 ## 1. Purpose
-Materializes STAC metadata to storage (Disk, S3, etc.) in the desired format (JSON, Parquet).
+Materializes STAC metadata to storage (Disk, S3, etc.) in a structured format.
+The primary output format is a "Static STAC" directory structure, consisting of a collection definition and individual, self-contained item files.
 
 ## 2. Architecture
-- **Writers**: Uses `PySTAC` for JSON and `stac-geoparquet` for Parquet.
-- **Layout**: Manages directory structure (e.g. `collection/item_id/item.json`).
-- **Manifest**: Generates a list of all files written for downstream processing (e.g. `pgstac` ingestion).
-- **Atomicity**: MUST use the Atomic Output Pattern (see [State Persistence](../08-state-persistence.md#5-atomic-write-strategy)) to prevent data corruption during partial writes.
+- **Writers**:
+    - **JSON (Default)**: Writes individual item files (`item_id.json`) and a `collection.json`.
+    - **Parquet (Optional)**: writes a single `items.parquet` file at the root or configured path for bulk analytics using `stac-geoparquet`.
+- **Layout**: 
+    - **Exploded (Standard)**: `/{base_dir}/{collection_id}/items/{item_id}.json` (or just `/{collection_id}/items/{item_id}.json` depending on configuration).
+    - **Collection File**: Always generated as `/{base_dir}/{collection_id}/collection.json`.
+- **Atomicity**: MUST use the Atomic Output Pattern (write to temp, then rename/move) where possible to prevent partial file corruption.
 
 ## 3. Configuration Schema
 
 ```python
 from pydantic import BaseModel
-from typing import Literal
+from typing import Literal, Optional, TypedDict
 
 class OutputConfig(BaseModel):
-    format: Literal['json', 'parquet']
-    output_path: str
-    organize_by: Literal['item_id', 'flat'] = 'item_id'
+    base_dir: str
+    """
+    Root directory for output.
+    Example: "./data" or "s3://my-bucket/stac"
+    """
+    
+    format: Literal['json', 'parquet'] = 'json'
+    """
+    Output format.
+    - 'json': Individual valid JSON files (Static STAC).
+    - 'parquet': Single GeoParquet file (Bulk Analytics).
+    """
+
+    BASE_URL: Optional[str] = None
+    """
+    Optional base URL for constructing self links.
+    """
 
 class OutputResult(TypedDict):
     """
     Result returned by OutputModule.execute().
     
     Attributes:
-        files_written: List of absolute file paths corresponding to the 'path' field in the manifest.
-        manifest_path: Absolute path to the generated manifest.json file.
-        manifest: The full dictionary content of the manifest (see Data Contracts).
+        files_written: List of absolute file paths created.
     """
     files_written: list[str]
-    manifest_path: str
-    manifest: dict
 ```
 
 ### 3.1 Example Usage (YAML)
 
+**Standard Static STAC Output:**
 ```yaml
-- id: output
+- id: writer
   module: OutputModule
   config:
-    format: parquet
-    output_path: "s3://my-bucket/stac-output"
-    organize_by: item_id
+    base_dir: "./stac-output"
+    format: "json"
+```
+
+**Analytics Output:**
+```yaml
+- id: writer_analytics
+  module: OutputModule
+  config:
+    base_dir: "s3://data-lake/stac"
+    format: "parquet"
 ```
 
 ## 4. I/O Contract
 
 **Input (Workflow Context)**:
-- Items from previous step (via `context.data` stream reference).
+- `config` (Module Configuration):
+  - `base_dir`, `format`, `BASE_URL`
+- `context.data` (injected by Matrix Strategy):
+  - Matrix Variables: Available for string interpolation in config.
+- Items from previous step (Stream).
+- `collection` object (from `WorkflowContext` metadata if available, to write `collection.json`).
 
 **Protocol Methods** (Bundler):
 
 ```python
 def bundle(self, item: dict, context: WorkflowContext) -> None:
     """
-    Add an item to the current write buffer.
+    Writes the item to the configured destination.
     
-    Behavior:
-        - Accumulates items until batch_size is reached
-        - Flushes buffer to disk when full (atomic write)
+    Logic:
+    1. If `BASE_URL` is configured:
+       - Update item links ('self', 'root', 'parent', 'collection') to fully qualified URLs.
+    
+    2. If format == 'json':
+       - Resolve output path: `base_dir / collection_id / items / filename_template`.
+       - Write content atomically (write to temp -> rename).
+       - Record file path in stats.
+       
+    3. If format == 'parquet':
+       - Buffer item in memory (or write to temporary Arrow stream).
+       - Do NOT write individual files.
     """
     ...
 
 def finalize(self, context: WorkflowContext) -> OutputResult:
     """
-    Flush any remaining items and generate execution manifest.
+    Finalizes the output process.
     
-    Returns:
-        OutputResult containing files_written, manifest_path, and manifest dict.
-        See: Data Contracts - Output Result Schema
+    Logic:
+    1. If format == 'parquet':
+       - Flush buffered items to `items.parquet`.
+       - Record file path.
+       
+    2. If a 'collection' definition exists in context:
+       - Write `collection.json` to `base_dir / collection_id /`.
+       - Record file path.
+       
+    3. Return report of all files written.
     """
     ...
 ```
 
-> [!NOTE]
-> **Related Documents**: See [Protocols - Bundler](../06-protocols.md#13-bundler-sink) and [Data Contracts - Output Result](../05-data-contracts.md#6-output-result-schema).
+## 5. Directory Structure Example
 
-## 5. Error Handling
-- **IOError**: Log failure (disk full, permission).
-- **Format Error**: If data cannot be serialized to Parquet (e.g. mixed schemas), fail batch or item.
+For a collection `sentinel-2-l2a`:
 
+```text
+/stac-output/
+└── sentinel-2-l2a/
+    ├── collection.parquet # If format='parquet'
+    ├── collection.json
+    └── items/
+        ├── S2A_TL_..._L2A.json
+        ├── S2B_TL_..._L2A.json
+        └── ...
+```
+
+## 6. Error Handling
+- **IOError**: Fail the individual item (if recoverable) or the step (if disk full).
+- **Missing Collection ID**: Items must have a `collection` field to determine the directory structure. If missing, log error and skip or put in `orphan/` directory.

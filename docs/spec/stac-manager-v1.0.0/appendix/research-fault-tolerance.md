@@ -2,6 +2,7 @@
 
 **Status**: Analysis Complete  
 **Related Components**: `WorkflowOrchestrator`, `CheckpointManager`, `OutputModule`
+**NOTE**: This document is a research artifact that will be applied in version 1.1.
 
 ---
 
@@ -100,7 +101,7 @@ We cannot rely on atomic writes alone if the process terminates mid-logic.
 
 ## 5. Summary of Requirements for V1.0
 
-1.  **Mandatory Intermediate Cache**: Between `Discovery/Ingest` and `Transform` phases, items MUST be serialized to disk. This is the only robust way to handle crashes without complex acknowledgement protocols.
+1.  **Mandatory Intermediate Cache**: Between `Ingest` and Modifier phases, items MUST be serialized to disk. This is the only robust way to handle crashes without complex acknowledgement protocols.
 2.  **Atomic File Ops**: Enforce `write_to_temp` -> `flush` -> `os.replace` for all state files.
 3.  **Corrupt State Recovery**: Startup routine must tolerate and quarantine unreadable state files.
 4.  **Signal Handling**: Engine must catch `SIGINT` to flush pending batches before exit.
@@ -113,9 +114,9 @@ graph TD
     B -->|Atomic Write| C[Disk Cache / Items]
     B -->|Update| D[Ingest Checkpoint]
     
-    C -->|Read| E(Transform Step)
+    C -->|Read| E(Modifier Step)
     E -->|Process| F[Final Output]
-    E -->|Update| G[Transform Checkpoint]
+    E -->|Update| G[Modifier Checkpoint]
     
     subgraph "Crash Barrier"
     C

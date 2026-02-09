@@ -1,1 +1,19 @@
 .venv
+
+# Doc files
+/docs/plans/_legacy
+
+# Python related context
+__pycache__
+
+# log files and data
+logs
+results
+data
+outputs
+checkpoints
+
+# misc folders and files
+archive
+/examples/**
+_dev

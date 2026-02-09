@@ -1,0 +1,57 @@
+# Tutorial 02: Update Pipeline - Modifying Items In-Flight
+#
+# This workflow demonstrates how to transform STAC items using ModifyModule:
+# 1. IngestModule: Fetch items from local sample data
+# 2. ModifyModule: Update/enrich item properties
+# 3. ValidateModule: Validate modified items
+# 4. OutputModule: Persist to disk
+#
+# Key concepts:
+# - ModifyModule: Transform items in-flight without loading all into memory
+# - Property updates: Add, update, or rename item fields
+# - Chaining modules: Connect multiple processors in sequence
+#
+# Run this workflow:
+#   stac-manager run-workflow samples/sentinel-2-l2a-api/workflows/02-update-pipeline.yaml
+
+name: update-pipeline
+version: "1.0"
+description: "Modify item properties in-flight"
+resume_from_checkpoint: false # Set to true to resume from existing checkpoints
+
+steps:
+# Step 1: Fetch items from local file
+- id: ingest
+  module: IngestModule
+  config:
+    mode: file
+    source: samples/sentinel-2-l2a-api/data/items.json
+    collection_id: sentinel-2-l2a
+
+# Step 2: Use an UpdateModule to modify item properties in-flight 
+- id: update
+  module: UpdateModule
+  depends_on: [ ingest ]
+  config:
+    mode: merge
+    updates:
+      properties.processed: true
+      properties.processing_date: "2024-01-26T00:00:00Z"
+      properties.processing_note: "Processed via tutorial 02 workflow"
+    create_missing_paths: true
+    auto_update_timestamp: true
+
+# Step 3: Validate modified items
+- id: validate
+  module: ValidateModule
+  depends_on: [ update ]
+  config:
+    strict: true
+
+# Step 4: Output to persistent collection structure
+- id: output
+  module: OutputModule
+  depends_on: [ validate ]
+  config:
+    base_dir: ./outputs/tutorial-02
+    format: json

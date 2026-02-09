@@ -1,0 +1,80 @@
+# Tutorial 03: Extension Pipeline - Adding STAC Extensions and Enriching with data from an input file
+#
+# This workflow demonstrates data enrichment using ExtensionModule and TransformModule:
+# 1. IngestModule: Fetch items from local sample data
+# 2. ExtensionModule: Add Alternate Assets extension
+# 3. TransformModule: Merge with input data
+# 4. ValidateModule: Validate enriched items
+# 5. OutputModule: Persist to disk
+#
+# Key concepts:
+# - STAC Extensions: Add standardized properties to items (one extension per step)
+# - Alternate Assets: Specify alternate locations/mirrors for assets (e.g., S3, HTTP)
+# - Input File: External data merged with items (JSON)
+# - Data enrichment: Combining multiple sources in-flight
+#
+# Note: ExtensionModule processes one extension at a time. To add multiple extensions,
+#       chain multiple ExtensionModule steps or use UpdateModule for simple property additions.
+#
+# Run this workflow:
+#   stac-manager run-workflow samples/sentinel-2-l2a-api/workflows/03-extension-pipeline.yaml
+
+name: extension-pipeline
+version: "1.0"
+description: "Add STAC extension and enrich with input data"
+resume_from_checkpoint: false # Set to true to resume from existing checkpoints
+
+steps:
+# Step 1: Fetch items from local file
+- id: ingest
+  module: IngestModule
+  config:
+    mode: file
+    source: samples/sentinel-2-l2a-api/data/items.json
+    collection_id: sentinel-2-l2a
+
+# Step 2: Add Alternate Assets STAC extension
+# This extension allows specifying alternate locations/mirrors for assets
+# We use dot-notation in defaults to specify values for specific assets
+- id: add_alternate_assets
+  module: ExtensionModule
+  depends_on: [ ingest ]
+  config:
+    schema_uri: "https://stac-extensions.github.io/alternate-assets/v1.2.0/schema.json"
+    defaults:
+      assets.*.alternate.s3.href: "s3://example-bucket/{collection_id}/{asset_key}/"
+      assets.*.alternate.s3.alternate:name: "S3"
+      assets.*.alternate:name: "HTTPS"
+    required_fields_only: true
+
+# Step 3: Enrich items with input data (if file exists)
+# Note: This step demonstrates merging external data with STAC items
+- id: transform
+  module: TransformModule
+  depends_on: [ add_alternate_assets ]
+  config:
+    input_file: samples/sentinel-2-l2a-api/input-data/cloud-cover.json
+    strategy: "merge"
+    handle_missing: "ignore"
+    # field_mapping uses JMESPath on the input entry
+    # The keys are target field names in item properties
+    # The values are JMESPath queries applied to the input entry
+    field_mapping:
+      cloud_cover_extra: "cloud_cover"
+      snow_cover_extra: "snow_cover"
+
+#Step 4: Validate enriched items  
+#Temporarily disabled for debugging
+- id: validate
+  module: ValidateModule
+  depends_on: [ transform ]
+  config:
+    strict: false
+
+# Step 5: Output to persistent collection structure
+- id: output
+  module: OutputModule
+  depends_on: [ transform ]
+  config:
+    base_dir: ./outputs/tutorial-03
+    format: json

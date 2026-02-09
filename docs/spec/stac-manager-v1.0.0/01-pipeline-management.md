@@ -24,11 +24,19 @@ The **StacManager** is the engine that executes a pipeline of STAC operations.
 ### The StacManager
 The `StacManager` class:
 1. Loads and validates the YAML configuration.
+   - 1a. Resolves variable substitutions (Environment & Matrix context).
 2. Builds a pipeline DAG from step dependencies.
 3. Validates the DAG (no cycles, all dependencies exist).
 4. Instantiates components (Fetchers, Modifiers, Bundlers) for each step.
 5. Executes the pipeline levels, wiring streams between roles.
 6. Aggregates results and generates a summary report.
+
+### 2.1 Matrix Execution Strategy (Parallelism)
+The **Matrix Strategy** allows the StacManager to spawn parallel pipelines based on a global configuration list (e.g., a list of collections or regions).
+
+- **Concept**: The configuration defines a matrix (e.g., `input_matrix: collections`).
+- **Behavior**: The StacManager iterates over this matrix *before* starting execution. For each entry, it creates a fully isolated pipeline instance (sharing the same DAG structure) injected with the specific matrix values (e.g., `collection_id`).
+- **Benefit**: Fault isolation. If one collection fails, others continue processing.
 
 ### High-Level Flow
 
@@ -49,301 +57,102 @@ graph TD
 ---
 
 ## 3. WorkflowContext Specification
-
-The `WorkflowContext` is the shared state object passed to every module's `execute()` method.
-
-### 3.1 Structure
-
-```python
-from dataclasses import dataclass
-from typing import Any, TypedDict
-import logging
-from stac_manager.config import WorkflowDefinition
-
-@dataclass
-class WorkflowContext:
-    """Shared state for pipeline execution."""
-    workflow_id: str                      # Unique execution identifier
-    config: 'WorkflowDefinition'          # Full workflow definition
-    logger: logging.Logger                # Structured logger instance
-    failure_collector: FailureCollector   # Error aggregator
-    checkpoints: CheckpointManager        # State persistence manager
-    data: dict[str, Any]                  # Inter-step ephemeral data store
-
-def _init_context(config: WorkflowDefinition) -> WorkflowContext:
-    """Create workflow context from configuration."""
-    return WorkflowContext(
-        workflow_id=config.name,
-        config=config,
-        logger=setup_logger(config.settings.logging),
-        failure_collector=FailureCollector(),
-        checkpoints=CheckpointManager(directory=..., workflow_id=config.name),
-        data={}
-    )
-```
-
----
-
-## 4. FailureCollector Specification
-
-The `FailureCollector` aggregates non-critical errors during workflow execution.
-
-### 4.1 Public Interface
-
-```python
-from dataclasses import dataclass
-from datetime import datetime
-from typing import Any
-
-@dataclass
-class FailureRecord:
-    """Single failure record."""
-    step_id: str          # Step where failure occurred
-    item_id: str          # Item/record identifier (or "unknown")
-    error_type: str       # Exception class name or error category
-    message: str          # Error message
-    timestamp: str        # ISO 8601 timestamp
-    context: 'FailureContext | None'  # Optional additional context
-
-class FailureContext(TypedDict, total=False):
-    """Context for failure debugging."""
-    source_file: str
-    line_number: int
-    field_name: str
-    url: str
-    http_status: int
-    retry_attempt: int
-
-class FailureCollector:
-    """Collect and manage non-critical failures."""
-    
-    def add(
-        self, 
-        item_id: str, 
-        error: str | Exception,
-        step_id: str = 'unknown',
-        error_context: 'FailureContext | None' = None
-    ) -> None:
-        """
-        Add a failure record.
-        
-        Args:
-            item_id: Identifier of failed item
-            error: Error message or exception
-            step_id: Step ID where failure occurred
-            error_context: Additional context (line number, source file, etc.)
-        """
-        ...
-    
-    def get_all(self) -> list[FailureRecord]:
-        """Get all collected failures."""
-        ...
-    
-    def write_report(self, output_path: str) -> None:
-        """
-        Write failures to JSON file.
-        
-        Output format defined in data-contracts.md
-        """
-        ...
-    
-    def count(self) -> int:
-        """Get total failure count."""
-        ...
-    
-    def count_by_step(self) -> dict[str, int]:
-        """Get failure counts grouped by step_id."""
-        ...
-```
-
-### 4.2 Usage Pattern
-
-```python
-# In a module's execute() method
-async def execute(self, context: WorkflowContext):
-    for item in source_items:
-        try:
-            result = process_item(item)
-            results.append(result)
-        except ValidationError as e:
-            # Non-critical: log and continue
-            context.failure_collector.add(
-                item_id=item.get('id', 'unknown'),
-                error=str(e),
-                step_id='transform',
-                error_context={'source_file': self.source_file}
-            )
-            continue
-    
-    return results
-```
+ 
+ See [Data Contracts](./05-data-contracts.md#22-workflowcontext).
+ 
+ ---
+ 
+ ## 4. FailureCollector Specification
+ 
+ See [Data Contracts](./05-data-contracts.md#23-failurecollector).
 
 ---
 
 ## 5. Error Class Hierarchy
-
-### 5.1 Exception Classes
-
-```python
-class StacManagerError(Exception):
-    """Base exception for all STAC Manager errors."""
-    pass
-
-class ConfigurationError(StacManagerError):
-    """
-    Configuration validation failed.
-    
-    Usage: Raise at startup when config is invalid
-    Effect: Workflow aborts before execution starts
-    """
-    pass
-
-class ModuleException(StacManagerError):
-    """
-    Critical module error.
-    
-    Usage: Raise when module cannot continue (missing dependency, invalid state)
-    Effect: Workflow step fails, orchestrator aborts (or continues to next branch)
-    """
-    pass
-
-class WorkflowConfigError(StacManagerError):
-    """
-    Invalid workflow definition.
-    
-    Usage: Raise when workflow has structural errors (cycles, missing steps)
-    Effect: Workflow aborts before execution starts
-    """
-    pass
-
-class WorkflowExecutionError(StacManagerError):
-    """
-    Workflow execution failed.
-    
-    Usage: Raised by orchestrator when critical step fails
-    Effect: Workflow terminates, error logged
-    """
-    pass
-
-class DataProcessingError(StacManagerError):
-    """
-    Non-critical data error.
-    
-    Usage: For item-level failures that should be collected, not raised
-    Effect: Caught by module, logged to FailureCollector
-    
-    Note: This is often caught immediately, not propagated
-    """
-    pass
-
-class ExtensionError(StacManagerError):
-    """
-    Extension apply/validate error.
-    
-    Usage: When extension cannot be applied to item
-    Effect: Depends on context (may be collected or raised)
-    """
-    pass
-```
-
-### 5.2 Error Handling Strategy
-
-| Error Type | When to Raise | Handling Strategy |
-|------------|---------------|-------------------|
-| `ConfigurationError` | Invalid YAML, missing required fields | Fail fast at startup |
-| `WorkflowConfigError` | DAG cycles, unknown step dependencies | Fail fast at startup |
-| `ModuleException` | Module cannot execute (missing file, invalid config) | Abort workflow |
-| `DataProcessingError` | Single item failed validation/transform | Collect and continue |
-| `ExtensionError` | Extension cannot be applied | Collect and continue (or abort if strict) |
+ 
+ See [Data Contracts](./05-data-contracts.md#21-exception-hierarchy).
 
 ---
 
 ## 6. DAG Building Algorithm
 
 ### 6.1 Purpose
-Determine execution order from step dependencies, enabling parallel execution of independent steps.
+Determine a linear valid execution order from step dependencies. 
+This allows users to define flexible, readable dependency graphs (DAGs) in configuration—including branching parallel logic—while the engine executes them as a stable linear sequence to ensure predictable stream processing.
 
-### 6.2 Algorithm: Topological Sort
+### 6.2 Algorithm: Topological Sort + Linearization
 
-**Approach**: Kahn's Algorithm (BFS-based topological sort with level detection)
+**Approach**: Kahn's Algorithm (BFS-based topological sort) -> Flattened List
 
 **Steps**:
-1. Calculate in-degree (number of dependencies) for each step
-2. Find all steps with zero dependencies → Execution Level 1
-3. Remove Level 1 steps from graph, decrement in-degrees
-4. Find new zero-dependency steps → Execution Level 2
-5. Repeat until all steps assigned or cycle detected
+1. Calculate in-degree (number of dependencies) for each step.
+2. Identify independent steps (Level 0).
+3. Resolve dependencies layer by layer to build "Execution Levels".
+4. **Flatten** levels into a single ordered list: `[Step A, Step B, Step C]`.
 
-**Output**: List of execution levels, where each level contains steps that can run in parallel
+**Output**: A single list of steps in execution order.
 
 ```python
-def build_dag(steps):
+def build_execution_order(steps):
     """
-    Pseudocode for Dependency Resolution (Kahn's Algorithm).
+    Pseudocode for Dependency Resolution & Linearization.
     """
-    # 1. Initialize graph tracking
-    in_degree = {step.id: 0 for step in steps}
-    graph = {step.id: [] for step in steps}
+    # 1. Build Dependency Graph
+    graph = build_graph(steps)
     
-    # 2. Build adjacency list and calculate in-degrees
-    for step in steps:
-        for dependency in step.depends_on:
-            # Tier 2: Validation Logic
-            if dependency not in [s.id for s in steps]:
-                raise WorkflowConfigError(f"Step '{step.id}' depends on unknown step '{dependency}'")
-            
-            graph[dependency].append(step.id)
-            in_degree[step.id] += 1
-            
-    # 3. Find initial nodes (Level 0)
-    queue = [s for s in steps if in_degree[s] == 0]
-    execution_levels = []
+    # 2. Topological Sort (Kahn's Algorithm)
+    execution_levels = topological_sort(graph)
     
-    # 4. Process graph level-by-level
-    while queue is not empty:
-        current_level = queue  # All nodes in queue can run in parallel
-        execution_levels.append(current_level)
-        
-        next_queue = []
-        for step in current_level:
-            # "Remove" step and process neighbors
-            for neighbor in graph[step]:
-                in_degree[neighbor] -= 1
-                if in_degree[neighbor] == 0:
-                    next_queue.append(neighbor)
-        
-        queue = next_queue
-
-    # 5. Cycle Detection
-    if count(execution_levels) < total_steps:
+    # 3. Cycle Detection
+    if len(flatten(execution_levels)) < len(steps):
         raise Error("Cycle detected")
         
-    return execution_levels
+    # 4. Linearization (Flattening)
+    # Convert [[A], [B, C], [D]] -> [A, B, C, D]
+    # Note: B and C order is deterministic within the algorithm but interchangeable in the graph
+    linear_order = [step for level in execution_levels for step in level]
+        
+    return linear_order
 ```
 
 ### 6.3 Example
 
-**Workflow Configuration**:
+**Workflow Configuration** (Branching Style):
 ```yaml
 steps:
-  - id: discover         # No dependencies
-  - id: ingest           # depends_on: [discover]
+  - id: ingest           # No dependencies
   - id: apply_dgeo       # depends_on: [ingest]
   - id: apply_eo         # depends_on: [ingest]
   - id: validate         # depends_on: [apply_dgeo, apply_eo]
   - id: output           # depends_on: [validate]
 ```
 
-**DAG Output**:
+**DAG Processing**:
+1.  **Levels**: `[[ingest], [apply_dgeo, apply_eo], [validate], [output]]`
+2.  **Flatten**: `['ingest', 'apply_dgeo', 'apply_eo', 'validate', 'output']`
+
+**Final Execution Order**:
 ```python
-[
-    ['discover'],              # Level 0: No dependencies
-    ['ingest'],                # Level 1: Depends on discover
-    ['apply_dgeo', 'apply_eo'],# Level 2: Both depend on ingest (parallel!)
-    ['validate'],              # Level 3: Depends on both extensions
-    ['output']                 # Level 4: Depends on validate
-]
+['ingest', 'apply_dgeo', 'apply_eo', 'validate', 'output']
 ```
+
+> [!NOTE]
+> **Config vs Execution**: The configuration example above suggests `apply_dgeo` and `apply_eo` run in parallel on the same input. The Linearization algorithm converts this into a sequential chain. This allows the configuration to remain logical and context-heavy (explicitly stating dependencies) while the runtime remains simple and robust.
+
+### 6.4 Error Handling
+
+**Cycle Detection**:
+- If cycle found: Identify one complete cycle path (e.g., `['A', 'B', 'C', 'A']`)
+- Raise `WorkflowConfigError` with descriptive message: `"Circular dependency detected: A -> B -> C -> A"`
+
+**Missing Dependencies**:
+- If step references unknown step ID: Raise `WorkflowConfigError` immediately during validation
+- Message should identify the problematic step and the missing dependency
+
+**Unreachable Steps**:
+- After topological sort, verify all steps are included in execution order
+- If steps missing: Raise `WorkflowConfigError` listing unreachable step IDs
+- Common cause: Disconnected subgraphs (steps with no path to/from other steps)
 
 ---
 
@@ -355,10 +164,9 @@ The orchestrator maintains a mapping of module class names to Python module path
 
 ```python
 MODULE_REGISTRY = {
-    'DiscoveryModule': 'stac_manager.modules.discovery.DiscoveryModule',
     'IngestModule': 'stac_manager.modules.ingest.IngestModule',
+    'SeedModule': 'stac_manager.modules.seed.SeedModule',
     'TransformModule': 'stac_manager.modules.transform.TransformModule',
-    'ScaffoldModule': 'stac_manager.modules.scaffold.ScaffoldModule',
     'ExtensionModule': 'stac_manager.modules.extension.ExtensionModule',
     'ValidateModule': 'stac_manager.modules.validate.ValidateModule',
     'UpdateModule': 'stac_manager.modules.update.UpdateModule',
@@ -374,7 +182,7 @@ def _import_module(module_class_name: str):
     Dynamically import and return module class.
     
     Args:
-        module_class_name: Class name from workflow YAML (e.g., 'DiscoveryModule')
+        module_class_name: Class name from workflow YAML (e.g., 'IngestModule')
     
     Returns:
         Module class (not instance)
@@ -398,60 +206,70 @@ def _import_module(module_class_name: str):
 
 ### 7.3 Step Execution (Role-Based)
 
-The StacManager executes steps by identifying their role and wiring the data flow accordingly.
+The StacManager executes steps sequentially, wiring the output of upstream steps to the input of downstream steps via the `WorkflowContext`.
 
 ```python
 async def _execute_step(step_id: str, context: WorkflowContext):
     """Execute a single pipeline step."""
     step_config = steps[step_id]
-    component_class = _import_component(step_config.module)
-    instance = component_class(step_config.config)
+    component = load_component(step_config.module, step_config.config)
     
-    # 1. Determine Input Stream
-    input_data = context.data.get(step_config.depends_on[0]) if step_config.depends_on else None
+    # 1. Resolve Input Stream
+    # Retrieve input data from ALL dependencies
+    # If multiple dependencies, we might implement merging here in the future.
+    # For V1, we typically assume linear chains (size=1).
+    sources = [context.data[dep_id] for dep_id in step_config.depends_on]
+    input_stream = sources[0] if sources else None
 
     # 2. Execute based on Role
-    if hasattr(instance, 'fetch'):
-        # Role: Fetcher (Source)
-        result = await instance.fetch(context)
+    if role_is_fetch(component):
+        # Role: Fetcher (Source) -> Returns AsyncIterator
+        return component.fetch(context)
         
-    elif hasattr(instance, 'modify'):
-        # Role: Modifier (Processor)
-        async def modifier_pipe(stream: AsyncIterator[dict]):
+    elif role_is_modify(component):
+        # Role: Modifier (Processor) -> Returns AsyncIterator (Wrapper)
+        # Orchestrator wraps the Sync modify() method in an Async Generator
+        async def modifier_wrapper(stream):
             async for item in stream:
-                # 2.1 Automatic Resume Check (Checkpointing)
-                if context.checkpoints.contains(item['id']):
-                    continue
-                
-                # 2.2 Execute Module logic
-                modified = instance.modify(item, context)
-                if modified is not None:
-                    yield modified
+                # Execute Sync Modifier
+                result = component.modify(item, context)
+                if result:
+                    yield result
         
-        result = modifier_pipe(input_data)
+        return modifier_wrapper(input_stream)
         
-    elif hasattr(instance, 'bundle'):
-        # Role: Bundler (Sink)
-        async for item in input_data:
-            instance.bundle(item, context)
-        
-        result = instance.finalize(context)
+    elif role_is_bundle(component):
+        # Role: Bundler (Sink) -> Drains Stream & Writes
+        # Orchestrator drives the loop, Bundler handles Async I/O
+        async for item in input_stream:
+            await component.bundle(item, context)
+            
+        # Finalize (write collection.json, flush buffers, etc.)
+        return await component.finalize(context)
     
-    # 3. Store Result (Stream or Manifest)
-    context.data[step_id] = result
+    # 3. Store Result is implicit (returned above)
 ```
 
-#### 7.4 Handling Branching Streams
-If a Fetcher or Modifier output is needed by multiple downstream steps, the StacManager uses `stream_tee` to prevent iterator exhaustion.
+> [!IMPORTANT]
+> **Sink Requirement**: Every pipeline MUST end with a 'Bundler' (Sink) step (e.g., `OutputModule`). 
+> If a pipeline ends with a 'Modifier' step, the returned generator effectively "dangles" unconsumed, and no work will be performed. The Orchestrator does NOT automatically drain streams.
 
-```python
-async def stream_tee(
-    iterator: AsyncIterator[T], 
-    n: int = 2
-) -> tuple[AsyncIterator[T], ...]:
-    """Split an async iterator into n independent buffers."""
-    ...
-```
+### 7.4 Bundler Error Handling
+
+**Item-Level Failures** (Non-Critical):
+- Wrap `bundle()` calls in try-except for `DataProcessingError`
+- Collect failure via `context.failure_collector.add()`
+- Continue processing remaining items (do not abort)
+- Log progress periodically (e.g., every 1000 items)
+
+**Step-Level Failures** (Critical):
+- If `ModuleException` raised: abort the step immediately
+- If `finalize()` fails: propagate exception (workflow fails)
+
+**Finalization**:
+- Call `finalize()` even if some items failed
+- Finalize writes whatever succeeded (partial results acceptable)
+- Return result indicating files written
 
 ---
 
@@ -459,95 +277,79 @@ async def stream_tee(
 
 ### 8.1 Collection-Centric Data Flow
 
-Each collection is processed through an independent linear pipeline:
+Each collection is processed through an **independent linear pipeline** triggered by the **Matrix Strategy**:
 
 ```mermaid
 graph TD
-    subgraph "Discovery (runs once)"
-        A[discover] -->|list of collections| B[Orchestrator]
-    end
+    Config["Configuration Matrix"] -->|Spawns| P1["Pipeline A (Landsat)"]
+    Config -->|Spawns| P2["Pipeline B (Sentinel)"]
     
-    subgraph "Per-Collection Pipeline (parallel)"
-        B -->|collection_id| C[ingest]
-        C -->|items stream| D[apply_ext_1]
-        D -->|items stream| E[apply_ext_2]
-        E -->|items stream| F[validate]
-        F -->|valid items| G[output]
+    subgraph "Pipeline A (Landsat)"
+        C[ingest] -->|items| D[apply_ext]
+        D -->|items| E[validate]
+        E -->|items| F[output]
     end
 ```
 
-### 8.2 Collection-Centric Parallel Execution
+### 8.2 Per-Collection Parallel Execution
 
-The Discovery Fetcher yields a list of Collections. The **StacManager** spawns **independent pipelines per Collection**, enabling parallelism at the collection level while maintaining a linear item flow within each pipeline.
+The **StacManager** iterates over the `input_matrix` defined in configuration and spawns **independent pipelines per entry** using `context.fork()`.
 
 ```python
-# Pseudocode: StacManager Collection-Centric Flow
-collections = await discovery_fetcher.fetch(context)
+# Pseudocode: StacManager Matrix Execution
+matrix = config.strategy.input_matrix # e.g. ["C1", "C2"]
 
-# Parallel collection processing
-async def process_collection(collection_id: str):
-    """Run a linear pipeline for one collection."""
-    # 1. Fetch Items
-    stream = await ingest_fetcher.fetch(context, collection_id=collection_id)
+# Parallel execution function
+async def execute_matrix_entry(entry: str):
+    # 1. Create Isolated Context (Child Context)
+    # This prevents Pipeline A from reading Pipeline B's data
+    child_context = context.fork(data={"collection_id": entry}) 
     
-    # 2. Modify Items (Sequential Modifiers)
-    stream = apply_modifier(transform_mod, stream)
-    stream = apply_modifier(validate_mod, stream)
-    
-    # 3. Bundle Results
-    await output_bundler.bundle_stream(stream, context)
-    return await output_bundler.finalize(context)
+    # 2. Run Pipeline for this entry
+    await self.execute_pipeline(child_context)
 
 # Launch parallel pipelines
-results = await asyncio.gather(*[process_collection(c.id) for c in collections])
+results = await asyncio.gather(*[execute_matrix_entry(entry) for entry in matrix])
 ```
 
 > [!NOTE]
-> **Workflow Flexibility**: The example above shows a typical `Discover -> Ingest -> Extensions -> Validate -> Output` flow. 
-> Other valid patterns include:
-> - `Ingest -> Output` (dump raw STAC to Parquet)
-> - `Transform -> Scaffold -> Validate -> Output` (ETL from CSV)
-> - `Ingest -> Update -> Output` (patch existing metadata)
->
-> The `depends_on` field in workflow YAML defines the execution order.
+> **Parallelism**: Parallel execution happens **between** matrix entries (e.g., Landsat runs at the same time as Sentinel). Within a single pipeline (Landsat), execution is **sequential-but-streaming** (Ingest feeds Apply, which feeds Validate).
 
 ---
 
 ## 9. Workflow Execution
 
- ### 9.1 Execution Pattern
+### 9.1 Execution Pattern (Linear)
 
 ```python
-async def execute() -> WorkflowResult:
-    """Execute workflow and return results."""
+async def execute_pipeline(context: WorkflowContext) -> WorkflowResult:
+    """Execute linear workflow pipeline."""
     
-    # 1. Build DAG
-    execution_levels = build_dag(self.steps)
+    # 1. Build Linear Execution Order
+    ordered_steps = build_execution_order(self.steps)
     
-    # 2. Execute level-by-level
-    for level_idx, level in enumerate(execution_levels):
-        logger.info(f"Executing level {level_idx}: {level}")
-        
-        # Execute all steps in level concurrently
-        tasks = [_execute_step(step_id, context) for step_id in level]
-        await asyncio.gather(*tasks)
+    logger.info(f"Pipeline Execution Order: {ordered_steps}")
+    
+    # 2. Execute Step-by-Step
+    # Because of the streaming model, "Execution" here primarily means "Wiring the Pipe".
+    # The actual data flow happens as the final Sink step pulls data.
+    for step_id in ordered_steps:
+        # Pass control to step (wires input -> output)
+        # Note: Modifiers yield quickly (generator creation). 
+        # Bundlers/Sinks await until stream is exhausted.
+        await _execute_step(step_id, context)
     
     # 3. Generate results
-    # Success = No critical crashes (Partial item failures are allowed)
-    return WorkflowResult(
-        success=True, 
-        status='completed_with_failures' if context.failure_collector.count() > 0 else 'completed',
-        summary=generate_processing_summary(result, context.failure_collector),
-        failures_path=config.get('output_failures', 'failures.json')
-    )
+    return WorkflowResult(...)
 ```
 
-### 9.2 Parallel Execution
+### 9.2 Streaming Behavior (Lazy Evaluation)
+Steps do not "complete" one by one in terms of data. They "start" one by one.
+1. `Ingest` starts -> Returns Generator.
+2. `Apply` starts -> Reads `Ingest` Generator -> Returns New Generator.
+3. `Output` starts -> Reads `Apply` Generator -> **Drains Stream** -> Writes File.
 
-Steps within the same execution level run **concurrently** using `asyncio.gather()`:
-- Maximizes throughput
-- Respects dependencies (steps only run after all dependencies complete)
-- Handles failures gracefully (one step failure doesn't crash others in same level)
+The pipeline is **pulled** from the end (the Sink). The `await _execute_step` for the Sink step blocks until the entire stream is processed.
 
 ---
 

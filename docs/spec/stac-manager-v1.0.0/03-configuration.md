@@ -27,6 +27,15 @@ class SettingsConfig(BaseModel):
     default_concurrency: DefaultConcurrencyConfig = Field(default_factory=DefaultConcurrencyConfig)
     input_secrets: SecretsConfig = Field(default_factory=SecretsConfig)
 
+class StrategyConfig(BaseModel):
+    """Execution strategy configuration."""
+    matrix: Optional[List[Dict[str, Any]]] = None 
+    """
+    List of input parameters to spawn parallel pipelines.
+    Each dict is injected into the context.data of a child pipeline.
+    Example: [{"collection_id": "C1"}, {"collection_id": "C2"}]
+    """
+
 class StepConfig(BaseModel):
     """Defines a single workflow step."""
     id: str
@@ -43,6 +52,7 @@ class WorkflowDefinition(BaseModel):
     version: str = "1.0"
     
     settings: SettingsConfig = Field(default_factory=SettingsConfig)
+    strategy: StrategyConfig = Field(default_factory=StrategyConfig)
     steps: List[StepConfig]
 ```
 
@@ -90,9 +100,14 @@ settings:
   input_secrets:
     dotenv_path: "/etc/stac-manager/secrets.env"
 
+strategy:
+  matrix:
+    - collection_id: "landsat-c2-l2"
+      catalog_url: "https://cmr.earthdata.nasa.gov/stac/v1"
+
 steps:
-  - id: discover
-    module: DiscoveryModule
+  - id: ingest
+    module: IngestModule
     config:
        ...
 ```
@@ -113,6 +128,31 @@ config:
 ```
 
 The system will attempt to resolve `${VAR_NAME}` from the process environment variables at runtime. If the variable is missing, validation will fail.
+> [!IMPORTANT]
+> **Substitution Timing**: Variable substitution happens **BEFORE** module instantiation. This ensures that Pydantic models in module constructors (`__init__`) receive fully resolved values (e.g., `year: "2023"` becomes `year: 2023` integer), preventing validation errors on template strings.
+
+### 3.1 Matrix Variable Substitution
+Variables defined in `strategy.matrix` are also available for substitution within the `config` blocks of steps.
+- **Priority**: Matrix Variables > Environment Variables.
+- **Scope**: Matrix variables are only available within the specific pipeline instance spawned for that matrix entry.
+
+**Example**:
+
+```yaml
+strategy:
+  matrix:
+    - region: "us-west"
+      year: 2023
+    - region: "us-east"
+      year: 2024
+steps:
+  - id: ingest
+    module: IngestModule
+    config:
+      # Interpolates to "s3://bucket/us-west/2023/data.json"
+      # Run another process in parallel "s3://bucket/us-east/2024/data.json"
+      source_file: "s3://bucket/${region}/${year}/data.json"
+```
 
 ---
 
@@ -122,34 +162,39 @@ The `StacManager` uses a factory pattern to instantiate modules based on the `st
 
 ### 4.1 Constructor Injection
 For each step in the `WorkflowDefinition`:
-1.  The `module` string is resolved to a class (e.g., `discovery.DiscoveryModule`).
+1.  The `module` string is resolved to a class (e.g., `ingest.IngestModule`).
 2.  The `config` dictionary is passed directly to the module's `__init__` method.
 
 ```python
 # StacManager Instantiation Logic (Tier 2: Algorithmic Guidance)
 
-def _instantiate_modules(self, workflow: WorkflowDefinition) -> dict[str, ModuleInstance]:
+def _instantiate_step(self, step_config: StepConfig, context: WorkflowContext) -> ModuleInstance:
     """
-    Create module instances from workflow steps.
+    Instantiate a single module step with Context-aware substitution.
+    """
+    # 1. Substitute Variables (Env + Matrix + Context)
+    # Recursively replace ${var} in step_config.config
+    resolved_config = self.variable_substitutor.resolve(
+        step_config.config, 
+        context.data  # Matrix variables are in context.data
+    )
     
-    Returns:
-        Dictionary mapping step_id to instantiated module.
+    # 2. Resolve module class from registry
+    module_class = MODULE_REGISTRY.get(step_config.module)
+    if not module_class:
+        raise WorkflowConfigError(f"Unknown module: {step_config.module}")
+    
+    # 3. Instantiate with validated config
+    # Pydantic validation happens here inside the module's __init__
+    return module_class(config=resolved_config)
+    
+def _build_pipeline_instances(self, steps: List[StepConfig], context: WorkflowContext) -> dict[str, Any]:
+    """
+    Builds the pipeline components for THIS specific execution context.
     """
     instances = {}
-    
-    for step in workflow.steps:
-        # 1. Resolve module class from registry
-        module_class = MODULE_REGISTRY.get(step.module)
-        if not module_class:
-            raise WorkflowConfigError(f"Unknown module: {step.module}")
-        
-        # 2. Inject step config into module constructor
-        # The module's __init__ receives the raw config dict and validates
-        # it internally using Pydantic (see 4.3 below)
-        instance = module_class(config=step.config)
-        
-        instances[step.id] = instance
-    
+    for step in steps:
+        instances[step.id] = self._instantiate_step(step, context)
     return instances
 ```
 
@@ -162,17 +207,17 @@ def _instantiate_modules(self, workflow: WorkflowDefinition) -> dict[str, Module
 Each module validates its config in `__init__` using its own Pydantic model:
 
 ```python
-# Example: DiscoveryModule (Tier 2: Algorithmic Guidance)
+# Example: IngestModule (Tier 2: Algorithmic Guidance)
 from pydantic import BaseModel, HttpUrl
 
-class DiscoveryConfig(BaseModel):
+class IngestConfig(BaseModel):
     catalog_url: HttpUrl
     collection_ids: list[str] | None = None
 
-class DiscoveryModule:
+class IngestModule:
     def __init__(self, config: dict):
         # Pydantic validates and converts the raw dict
-        self.config = DiscoveryConfig(**config)
+        self.config = IngestConfig(**config)
     
     async def fetch(self, context: WorkflowContext) -> AsyncIterator[dict]:
         # Access validated config
@@ -184,17 +229,17 @@ class DiscoveryModule:
 
 Modules that need to share runtime data (not static config) use `context.data`.
 
-**Example**: Discovery stores `catalog_url` for downstream modules:
+**Example**: SeedModule stores collection_id for downstream modules:
 
 ```python
-# In DiscoveryModule.fetch()
+# In SeedModule.fetch()
 async def fetch(self, context: WorkflowContext) -> AsyncIterator[dict]:
-    # Store for downstream modules (e.g., IngestModule)
-    context.data['catalog_url'] = str(self.config.catalog_url)
+    # Store for downstream modules
+    if self.config.defaults and 'collection' in self.config.defaults:
+        context.data['collection_id'] = self.config.defaults['collection']
     
-    collections = await self._discover_collections()
-    for collection in collections:
-        yield collection.to_dict()
+    for item in items:
+        yield item
 ```
 
 **Example**: IngestModule reads `catalog_url` from context:
@@ -202,10 +247,10 @@ async def fetch(self, context: WorkflowContext) -> AsyncIterator[dict]:
 ```python
 # In IngestModule.fetch()
 async def fetch(self, context: WorkflowContext) -> AsyncIterator[dict]:
-    # Inherit catalog_url from Discovery step
-    catalog_url = context.data.get('catalog_url')
-    if not catalog_url:
-        raise ModuleException("IngestModule requires 'catalog_url' in context.data")
+    # Inherit collection_id from Matrix Strategy or Config
+    collection_id = context.data.get('collection_id')
+    if not collection_id and not self.config.collection_id:
+        raise ModuleException("IngestModule requires 'collection_id'")
     
     # Use inherited URL with module-specific collection_id
     async for item in self._fetch_items(catalog_url, self.config.collection_id):
@@ -217,22 +262,42 @@ async def fetch(self, context: WorkflowContext) -> AsyncIterator[dict]:
 When the StacManager spawns parallel per-collection pipelines (see [Pipeline Management](./01-pipeline-management.md#82-collection-centric-parallel-execution)), it injects the current `collection_id` into `context.data`:
 
 ```python
-# StacManager Per-Collection Dispatch (Tier 2: Algorithmic Guidance)
+# StacManager Matrix Execution (Tier 2: Algorithmic Guidance)
 
-async def _execute_collection_pipelines(self, collections: list[dict], context: WorkflowContext):
+async def _execute_matrix(self, workflow: WorkflowDefinition, context: WorkflowContext):
     """
-    Spawn parallel pipelines for each collection.
+    Spawn parallel pipelines for each matrix entry.
     """
-    async def process_one_collection(collection_dict: dict):
-        # Create a per-collection context with injected collection_id
-        collection_id = collection_dict['id']
-        context.data['_current_collection_id'] = collection_id
-        
-        # Execute remaining pipeline steps for this collection
-        await self._execute_pipeline_for_collection(collection_id, context)
+    matrix: List[dict] = workflow.strategy.matrix
     
-    # Parallel execution across collections
-    await asyncio.gather(*[
-        process_one_collection(c) for c in collections
-    ])
+    async def process_entry(entry: dict):
+        # 1. Fork Context & Inject Data
+        # 'entry' contains variables like {"collection_id": "C1"}
+        child_context = context.fork(data=entry)
+        
+        # 2. "Late Binding" Instantiation
+        # Instantiate modules specifically for THIS child context
+        # This allows ${collection_id} to be resolved before __init__
+        pipeline_instances = self._build_pipeline_instances(workflow.steps, child_context)
+        
+        # 3. Execute Pipeline
+        await self._execute_pipeline(pipeline_instances, child_context)
+
+    # Parallel execution
+    await asyncio.gather(*[process_entry(row) for row in matrix])
 ```
+
+### 4.6 Matrix Error Handling
+
+**Per-Entry Failure Strategy**:
+- Each matrix entry executes in isolated context (failures don't affect other entries)
+- If entry pipeline raises `WorkflowExecutionError`: Log error, mark entry as failed, continue others
+- Return list of `WorkflowResult` objects (one per entry, including failed entries)
+
+**Critical Failures**:
+- If exception occurs outside entry processing (e.g., matrix iteration itself): Propagate immediately
+
+**Result Aggregation**:
+- Workflow success = ALL entries successful
+- Total items processed = Sum of `total_items_processed` from all entry results
+- Total failures = Sum of `failure_count` from all entry results

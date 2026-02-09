@@ -8,7 +8,7 @@
 ---
 
 ## 0. System Requirements
-- **Python**: 3.10+ (Required for structural pattern matching and type hinting features)
+- **Python**: 3.12+ (Required for structural pattern matching and type hinting features)
 - **OS**: Linux, macOS, Windows
 - **Core Dependencies**:
     - `pystac>=1.10.0`
@@ -21,8 +21,8 @@
 The STAC Manager is a **composable pipeline manager** built on the **Pipes and Filters** design pattern. The architecture follows these core principles:
 
 - **Modularity (Filters)**: Self-contained components with specialized roles:
-    - **Fetchers (Sources)**: Retrieve and originate item streams (Discovery, Ingest).
-    - **Modifiers (Processors)**: Transform or enrich items in-stream (Transform, Scaffold, etc.).
+    - **Fetchers (Sources)**: Retrieve and originate item streams (Ingest, Seed).
+    - **Modifiers (Processors)**: Transform or enrich items in-stream (Transform, etc.).
     - **Bundlers (Sinks)**: Finalize and aggregate processed items (Output).
 - **Role-Based Protocols**: Type-safe interfaces tailored to the component's behavior (`fetch()`, `modify()`, `bundle()`).
 - **Configuration-Driven**: Workflows defined in YAML, executed by a central manager.
@@ -81,13 +81,11 @@ The system is organized into four distinct layers:
 
 ### Layer 2: Pipeline Management (StacManager)
 - **Responsibilities**: Build workflow DAGs, schedule steps, manage state (`WorkflowContext`), wire Fetchers to Bundlers.
-- **Components**: `StacManager`, `PipelineBuilder`, `FailureCollector`.
-- **Key Decision**: Rename `WorkflowOrchestrator` to `StacManager` to better reflect its role as the pipeline lifecycle manager.
+- **Components**: `StacManager`, `WorkflowContext`, `FailureCollector`.
 
 ### Layer 3: Pipeline Components (Roles)
 - **Responsibilities**: Implement domain logic within specialized protocols.
 - **Components**: Fetchers, Modifiers, and Bundlers.
-- **Key Decision**: Replace generic `ModuleProtocol` with role-specific interfaces to solve async/sync friction.
 
 ### Layer 4: Foundation (External)
 - **Responsibilities**: Standard STAC models, validation, and API clients.
@@ -112,6 +110,6 @@ The system is organized into four distinct layers:
 | **stac-geoparquet** | Format Conversion | Used by Bundlers for Parquet output |
 | **aiohttp** | Async HTTP | Engine for high-concurrency Fetchers |
 
-## 6. Summary
+## 7. Summary
 
 The `StacManager` v1.0 architecture implements a high-performance **Pipes and Filters** model optimized for streaming massive STAC catalogs. By strictly separating I/O (Fetchers), Logic (Modifiers), and Persistence (Bundlers), the system remains modular, testable, and robust against memory-related failures.

@@ -6,74 +6,95 @@
 ---
 
 ## 1. Purpose
-The Ingest Module fetches STAC Items from a Collection with support for pagination, concurrency, and rate limiting. It handles the "crawling" aspect of the pipeline.
+The Ingest Module fetches STAC Items for a **single collection** (or target). It enables high-throughput fetching by leveraging internal parallelism.
 
-It supports two modes:
-1.  **API Crawl**: Fetch items from a remote STAC API.
-2.  **File Read**: Load items from a local file (JSON/Parquet), enabling the **Parquet Cache Strategy**.
+> [!IMPORTANT]
+> **Matrix Execution**: In v1.0, the StacManager spawn *parallel pipelines* based on the global `strategy.matrix` configuration.
+> Therefore, this module instance is responsible for fetching items for **one** matrix entry (e.g., one `collection_id`) injected into its context.
 
 ## 2. Architecture
-Fetching data from APIs at scale requires careful resource management.
 
-### 2.1 ItemFetcher
-- **Responsibility**: High-throughput data fetching.
-- **Strategy**: **Native Async Search** (Strategy B).
-  - Use `aiohttp` for raw JSON fetching (non-blocking I/O).
-  - Use `pystac` only for parsing (CPU-bound).
-  - **Avoid**: `pystac_client.Client.search()` in the hot path (blocking).
+### 2.1 Fetcher Logic
+- **Responsibility**: Fetch items from the source defined in the context/config.
+- **Context Awareness**: Reads `context.data` to determine its target (e.g., `collection_id`, `catalog_url`).
+- **Modes**:
+    1.  **API Mode**: Uses `pystac-client` and non-blocking HTTP to crawl an API.
+    2.  **File Mode**: Reads from a local file (Parquet/JSON) if `source_file` is set.
 
-### 2.2 Hybrid Fetching Strategy
-To optimize both logic ("splitting") and throughput ("fetching"):
+#### Fetch Loop Pseudocode (Tier 2)
 
-1.  **Control Plane (Sync/Threaded)**: Use `pystac-client` to Query Metadata.
-    - Specifically checking `search(...).matched()` counts.
-    - Used by `RequestSplitter` to verify if a range is safe to fetch.
-    - Runs in `ThreadPoolExecutor` to avoid blocking the loop.
-2.  **Data Plane (Native Async)**: Use `aiohttp` for Item Pages.
-    - Once a time-range is deemed "safe" (count < limit), fetch it using native async.
-    - Yields raw STAC Item **dictionaries** immediately to the pipeline.
-- **Responsibility**: Manages cursor/page tracking and query sharding.
-- **Strategy**: **Temporal Request Splitting**.
-  - Recursively split time ranges when item counts exceed threshold (e.g., 10k).
-  - Prevents deep pagination server timeouts (offset > 10k).
-
-#### RequestSplitter Pseudocode
 ```python
-class RequestSplitter:
-    """Handles temporal splitting for deep pagination."""
+async def fetch(self, context: WorkflowContext) -> AsyncIterator[dict]:
+    """
+    Orchestrates fetching logic based on mode (API vs File).
+    """
+    # 1. Resolve Target
+    # Priority: Config > Context (injected by Matrix)
+    collection_id = self.config.collection_id or context.data.get('collection_id')
     
-    def split_range(self, time_range: tuple[datetime, datetime]) -> Iterator[tuple[datetime, datetime]]:
-        """
-        Recursively split time range until count < limit.
-        """
-        # Control Plane: Use pystac-client (threaded) to get count
-        count = self.get_count_via_pystac_client(time_range)
-        
-        if count < self.max_items_per_request:
-            yield time_range
-            return
+    if not collection_id and not self.config.source_file:
+         raise ConfigurationError("Ingest target (collection_id or source_file) not defined")
 
-        # Split in half
-        mid_point = time_range[0] + (time_range[1] - time_range[0]) / 2
+    # 2. File Mode
+    if self.config.source_file:
+         async for item in self._read_file(self.config.source_file):
+             yield item
+         return
+
+    # 3. API Mode (Parallel)
+    # Step A: Generate Time Chunks
+    # Uses RequestSplitter utility to calculate optimal date ranges
+    splitter = RequestSplitter(self.config)
+    chunks = splitter.generate_chunks(self.config.filters.datetime)
+    
+    # Step B: Worker Pool Management
+    # The Module explicitly manages the workers that process these chunks.
+    # This ensures we control the concurrency and error handling directly.
+    async for item in self._fetch_chunks_parallel(chunks, collection_id):
+        yield item
+
+async def _fetch_chunks_parallel(self, chunks: List[TimeRange], collection_id: str) -> AsyncIterator[dict]:
+    """
+    Manages parallel workers to fetch items from chunks.
+    Implements 'Suppress & Collect' error handling pattern.
+    """
+    # Create a queue of chunks
+    queue = asyncio.Queue()
+    for chunk in chunks:
+        queue.put_nowait(chunk)
         
-        # Recurse left
-        yield from self.split_range((time_range[0], mid_point))
-        
-        # Recurse right
-        yield from self.split_range((mid_point, time_range[1]))
+    # Spawn workers
+    workers = [self._worker(queue, collection_id) for _ in range(self.config.concurrency)]
+    
+    # Gather results as they arrive (simulated via merged iterator or similar pattern)
+    # Note: In practice, use an asyncio.Queue for output or a stream merging utility
+    async for result in merge_workers(workers):
+        try:
+            yield result
+        except DataProcessingError as e:
+            # Suppress & Collect: Don't crash pipeline for single item failure
+            self.context.failure_collector.add(
+                item_id="unknown", 
+                error=e, 
+                step_id="ingest",
+                context={"chunk": e.chunk_id}
+            )
+            continue
 ```
 
-### 2.3 RateLimiter
-- **Responsibility**: Enforces API politeness.
-- **Mechanism**: Token bucket/semaphore as defined in [Utilities](../07-utilities.md). Responds to `429 Retry-After` headers.
+### 2.2 Internal Parallelism (Worker Strategy)
+To allow high-throughput fetching from APIs without timeouts:
+- **Problem**: Fetching 1M items linearly (offset + limit) is slow and flaky.
+- **Solution**: The module internally splits the time range into chunks and fetches them in parallel.
+- **Component**: `RequestSplitter` (Logic Provider only).
 
-### 2.4 FileFetcher (Parquet Cache Support)
-- **Responsibility**: Read items from a local file instead of an API.
-- **Trigger**: Active when `config.source_file` is set.
-- **Implementation**:
-  - **Parquet**: Uses `stac_geoparquet.to_item_collection` (or iterative read).
-  - **JSON**: Uses `pystac.ItemCollection.from_file`.
-  - **Yields**: Dictionaries (via `.to_dict()`) matching the pipeline wire format.
+The `RequestSplitter` calculates *how* to split the query (e.g. by year, month, or day), but the `IngestModule` is responsible for executing the split requests.
+
+### 2.3 HTTP Strategy (Tier 3)
+- **Requirement**: Must use a **Non-blocking HTTP Client** (e.g., `httpx` or `aiohttp`) for item fetching to ensure the main event loop is not blocked by I/O.
+- **Pattern**:
+    - `pystac-client` (Sync/Threaded): Used for metadata discovery and split planning.
+    - `httpx/aiohttp` (Async): Used for high-volume item fetching.
 
 ## 3. Configuration Schema
 
@@ -82,66 +103,56 @@ from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any
 
 class IngestFilters(BaseModel):
-    temporal: Optional[Dict[str, str]] = None # {"start": "...", "end": "..."}
-    spatial: Optional[list[float]] = None # [minx, miny, maxx, maxy]
-    query: Optional[Dict[str, Any]] = None 
     """
-    STAC API Query Extension parameters (JSON body).
-    See: [STAC Item Search filter parameter](https://api.stacspec.org/v1.0.0-rc.1/item-search/#tag/Item-Search/operation/postItemSearch)
+    Common filters supported by STAC APIs.
     """
+    bbox: Optional[List[float]] = None
+    datetime: Optional[str] = None
+    query: Optional[Dict[str, Any]] = None
+    ids: Optional[List[str]] = None
+    # Note: 'collections' is NOT included here. 
+    # The target collection is strictly defined by IngestConfig.collection_id or Matrix context.
 
 class IngestConfig(BaseModel):
-    collection_id: str
-    """
-    Single collection ID to ingest.
-    The StacManager manages parallelism at the collection level,
-    spawning independent pipelines for each collection.
-    """
+    # API Mode: Required if source_file is not set
+    catalog_url: Optional[str] = None
+    
+    # If provided in config, overrides Matrix context.
+    collection_id: Optional[str] = None 
+    
+    # File Mode switch (Overrides API Mode)
     source_file: Optional[str] = None
     """
-    Path to local JSON or Parquet file.
-    If set, overrides API fetching mode.
+    Path to a file or glob pattern (Local or Remote S3/GCS).
+    Example: "./data/*.json" or "s3://my-bucket/data/*.parquet"
+    Supports: Parquet, JSON (FeatureCollection), or generic JSON files.
     """
-    limit: Optional[int] = Field(None, gt=0)
-    concurrency: int = Field(default=5, ge=1)
-    rate_limit: float = Field(default=10.0, gt=0)
-    filters: IngestFilters = Field(default_factory=IngestFilters)
-```
-
-> [!NOTE]
-> **catalog_url**: When operating in API Crawl mode, the `catalog_url` is inherited from `context.data['catalog_url']` set by the upstream Discovery step. See [Configuration - Runtime Data Sharing](../03-configuration.md#44-runtime-data-sharing-via-workflowcontext).
-
-### 3.1 Example Usage (YAML)
-
-```yaml
-- id: ingest
-  module: IngestModule
-  depends_on: [discover]
-  config:
-    collection_id: "landsat-c2-l2"
-    limit: 1000
-    concurrency: 20
-    filters:
-      spatial: [-180, -90, 180, 90]
-      query:
-        "eo:cloud_cover": {"lt": 5}
+    
+    # Internal Parallelism
+    concurrency: int = Field(default=10, ge=1)
+    
+    # Filters applied to the API search
+    filters: Optional[IngestFilters] = None 
 ```
 
 ## 4. I/O Contract
 
 **Input (Workflow Context)**:
-- `collection_id` from config (required).
-- `catalog_url` inherited from `context.data['catalog_url']` (for API mode).
+- `config` (Module Configuration):
+  - `catalog_url` (Required for API Mode)
+  - `source_file` (Required for File Mode)
+- `context.data` (Injected by Matrix Strategy):
+  - `collection_id`: Used as the target collection if not overridden in config.
+  - Matrix Variables: Available for string interpolation (e.g. `${region}`).
 
-**Output (Python)**:
+**Output**:
 ```python
-AsyncIterator[dict]  # Yields raw STAC Item dictionaries
+AsyncIterator[dict] 
+# Yields a single interleaved stream of raw STAC Item dictionaries.
 ```
-> [!IMPORTANT]
-> **Streaming Requirement**: This module yields items one-by-one or in small batches. It MUST NOT accumulate the entire result set in memory.
 
 ## 5. Error Handling
-- **Fetch Failure (Single Page/Item)**: Log error to `FailureCollector`, skip, and continue.
-- **Rate Limit Exhaustion**: Retry N times, then fail the specific batch.
-- **Malformed Item**: Log validation warning, skip.
+- **429 (Rate Limit)**: Must implement exponential backoff.
+- **5xx (Server Error)**: Retry N times, then fail chunk.
+- **Partial Failure**: A failed chunk should be logged to `FailureCollector` but should not crash the entire pipeline (functionality allowing).
 

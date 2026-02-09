@@ -9,52 +9,168 @@
 
 This document defines the strict data structures and contracts used for inter-module communication, ensuring type safety and memory efficiency.
 
-## 1. Streaming vs Batching (Role-Based)
+## 1. Data Exchange Standards
 
-To support large-scale catalogs (1M+ items), the pipeline **MUST** use Iterators/Generators to maintain a constant memory profile.
+To support large-scale catalogs (1M+ items) and ensure module interoperability, the pipeline adheres to strict data exchange standards.
 
-- **Wire Format (The Pipe)**: `AsyncIterator[dict]`
-- **Module Internal Logic**: `pystac.Item` or `pystac.Collection`
+### 1.1 Wire Format
 
-### Rationale: Why `dict` for inter-module transfer?
+- **The Pipe**: `AsyncIterator[dict]`
+- **The Item**: Python `dict` (Standardized STAC Item structure)
+
+### 1.2 Memory Constraint (Streaming)
+
+Pipeline execution **MUST** use Iterators/Generators to maintain a constant memory profile.
+
+**Requirement**: Item-processing modules **MUST NOT** accumulate entire streams into `list[dict]` in-memory. They must yield results as they are processed.
+
+### 1.3 Rationale: Why `dict`?
+
 1.  **Performance**: Avoids redundant serialization/deserialization cycles between every step in the pipeline.
 2.  **Stability**: Pass-through data (fields not used by a specific module) remains untouched and safe from library-version-specific parsing quirks.
-3.  **Flexibility**: Allows non-STAC or "Dirty" metadata (from Transform modules) to flow through the same pipeline structure before being scaffolded.
-
-**Requirement**: Item-processing modules **MUST NOT** accumulate entire streams into `list[dict]` in-memory.
+3.  **Flexibility**: Allows non-STAC or "Dirty" metadata (from Transform modules) to flow through the same pipeline structure before being modified by downstream modules.
 
 ---
 
-## 2. Intermediate Data Schema
+## 2. System Contracts (Exceptions & Contexts)
 
-The contract between `TransformModule` and `ScaffoldModule`.
+### 2.1 Exception Hierarchy
+
+Stac Manager defines a strict hierarchy of exceptions for control flow.
 
 ```python
-from typing import TypedDict, Any
+class StacManagerError(Exception):
+    """Base exception for all STAC Manager errors."""
+    pass
 
-class TransformedItem(TypedDict, total=False):
+class ConfigurationError(StacManagerError):
     """
-    Standardized dictionary output from TransformModule.
-    Does not strictly require valid STAC fields yet, but MUST possess structure.
+    Configuration validation failed.
+    Usage: Raise at startup when config is invalid.
+    Effect: Workflow aborts before execution starts.
     """
-    id: str                             # Required: Item identifier
-    geometry: dict | None               # GeoJSON geometry or None
-    bbox: list[float] | None            # Bounding box [minx, miny, maxx, maxy]
-    datetime: str | None                # ISO 8601 datetime string
-    properties: dict[str, Any]          # Additional properties
-    assets: dict[str, dict]             # Asset definitions (key -> asset dict)
-    links: list[dict] | None            # Optional link objects
+    pass
+
+class ModuleException(StacManagerError):
+    """
+    Critical module error.
+    Usage: Raise when module cannot continue (missing dependency, invalid state).
+    Effect: Workflow step fails, orchestrator aborts (or continues to next branch).
+    """
+    pass
+
+class WorkflowConfigError(StacManagerError):
+    """
+    Invalid workflow definition.
+    Usage: Raise when workflow has structural errors (cycles, missing steps).
+    Effect: Workflow aborts before execution starts.
+    """
+    pass
+
+class WorkflowExecutionError(StacManagerError):
+    """
+    Workflow execution failed.
+    Usage: Raised by orchestrator when critical step fails.
+    Effect: Workflow terminates, error logged.
+    """
+    pass
+
+class DataProcessingError(StacManagerError):
+    """
+    Non-critical data error.
+    Usage: For item-level failures that should be collected.
+    Effect: Caught by module/orchestrator, logged to FailureCollector.
+    """
+    pass
+
+class ExtensionError(StacManagerError):
+    """
+    Extension apply/validate error.
+    Usage: When extension cannot be applied to item.
+    Effect: Depends on context (may be collected or raised).
+    """
+    pass
 ```
 
-**Usage**: See [Protocols](./06-protocols.md#31-transformeditem) for full specification.
+### 2.2 WorkflowContext
+
+The shared state object passed to every module's `execute()` method.
+
+```python
+from dataclasses import dataclass
+from typing import Any, TypedDict
+import logging
+# from stac_manager.config import WorkflowDefinition (Forward Ref)
+
+@dataclass
+class WorkflowContext:
+    """Shared state for pipeline execution."""
+    workflow_id: str                      # Unique execution identifier
+    config: Any                           # Full workflow definition (WorkflowDefinition)
+    logger: logging.Logger                # Structured logger instance
+    failure_collector: 'FailureCollector' # Error aggregator
+    checkpoints: 'CheckpointManager'      # State persistence manager
+    data: dict[str, Any]                  # Inter-step ephemeral data & Matrix variables
+
+    def fork(self, data: dict[str, Any]) -> 'WorkflowContext':
+        """
+        Create a child context with isolated data.
+        Used for Matrix Strategy to spawn parallel, isolated pipelines.
+        """
+        ...
+```
+
+### 2.3 FailureCollector
+
+Aggregates non-critical errors during workflow execution.
+
+```python
+from dataclasses import dataclass
+from typing import TypedDict, Optional
+
+class FailureContext(TypedDict, total=False):
+    """Context for failure debugging."""
+    source_file: str
+    line_number: int
+    field_name: str
+    url: str
+    http_status: int
+    retry_attempt: int
+
+@dataclass
+class FailureRecord:
+    """Single failure record."""
+    step_id: str          # Step where failure occurred
+    item_id: str          # Item/record identifier (or "unknown")
+    error_type: str       # Exception class name or error category
+    message: str          # Error message
+    timestamp: str        # ISO 8601 timestamp
+    context: Optional[FailureContext]  # Optional additional context
+
+class FailureCollector:
+    """
+    Collects non-critical failures for reporting.
+    """
+    def add(self, item_id: str, error: str | Exception, step_id: str = 'unknown', error_context: FailureContext | None = None) -> None:
+        ...
+    
+    def get_all(self) -> list[FailureRecord]:
+        ...
+```
 
 ---
 
-## 3. Failure Report Schema
+## 3. Intermediate Data Schema
+
+Intermediate data in the pipeline follows the standard **STAC Item** structure (as a `dict`). All modules operate directly on these dictionaries when processing items.
+
+---
+
+## 4. Failure Report Schema
 
 The schema of the `failures.json` file generated at workflow end.
 
-### 3.1 Complete Schema
+### 4.1 Complete Schema
 
 ```json
 {
@@ -86,7 +202,7 @@ The schema of the `failures.json` file generated at workflow end.
 }
 ```
 
-### 3.2 Field Descriptions
+### 4.2 Field Descriptions
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -99,7 +215,7 @@ The schema of the `failures.json` file generated at workflow end.
 | `failures_by_step` | dict | Failure counts grouped by step_id |
 | `failures` | array | Detailed failure records |
 
-### 3.3 Failure Record Fields
+### 4.3 Failure Record Fields
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -110,7 +226,7 @@ The schema of the `failures.json` file generated at workflow end.
 | `timestamp` | string | ISO 8601 timestamp of failure |
 | `context` | object? | Optional additional debugging info |
 
-### 3.4 Context Object (Optional)
+### 4.4 Context Object (Optional)
 
 The `context` field may contain step-specific debugging information:
 
@@ -127,96 +243,20 @@ The `context` field may contain step-specific debugging information:
 
 ---
 
-## 4. Output Manifest Schema
-
-The output manifest is generated by the `OutputModule` to document what files were written.
-
-### 4.1 Complete Schema
-
-```json
-{
-  "workflow_name": "nasa_earth_catalog",
-  "timestamp": "2024-01-15T12:30:00Z",
-  "format": "parquet",
-  "organize_by": "item_id",
-  "output_path": "./output/cmr-stac",
-  "files": [
-    {
-      "path": "output/collection_A.parquet",
-      "collection_id": "MODIS_Terra_L3",
-      "item_count": 5432,
-      "size_bytes": 12456789,
-      "created_at": "2024-01-15T12:28:30Z"
-    },
-    {
-      "path": "output/collection_B.parquet",
-      "collection_id": "SENTINEL_1A",
-      "item_count": 8921,
-      "size_bytes": 23456789,
-      "created_at": "2024-01-15T12:29:15Z"
-    }
-  ],
-  "total_items": 14353,
-  "total_size_bytes": 35913578,
-  "total_files": 2
-}
-```
-
-### 4.2 Field Descriptions
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `workflow_name` | string | Workflow name from config |
-| `timestamp` | string | ISO 8601 timestamp of manifest creation |
-| `format` | string | Output format ("json" or "parquet") |
-| `organize_by` | string | Organization strategy ("item_id", "flat", "collection") |
-| `output_path` | string | Root output directory |
-| `files` | array | List of files written |
-| `total_items` | integer | Total STAC items written |
-| `total_size_bytes` | integer | Total size of all output files |
-| `total_files` | integer | Total number of files written |
-
-### 4.3 File Record Fields
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `path` | string | Relative or absolute path to file |
-| `collection_id` | string? | Collection ID (if organized by collection) |
-| `item_count` | integer | Number of items in this file |
-| `size_bytes` | integer | File size in bytes |
-| `created_at` | string | ISO 8601 timestamp of file creation |
-
-### 4.4 Usage
-
-The manifest enables downstream processing:
-
-```python
-# Ingest into pgstac
-import json
-with open('output/manifest.json') as f:
-    manifest = json.load(f)
-
-for file_record in manifest['files']:
-    ingest_to_pgstac(file_record['path'])
-```
-
----
-
 ## 5. Query Language Standard
 
-For all configuration fields involving field selection or mapping (e.g., `TransformModule` schemas, filtering logic):
+For all configuration fields involving field selection or mapping (e.g., `TransformModule` field mapping, filtering logic):
 
 - **Standard**: [JMESPath](https://jmespath.org/)
 - **Library**: `jmespath` (Python)
 - **Rationale**: Standard, robust, security-safe (no `eval`)
 
-**Example**: Transform schema using JMESPath  
+**Example**: Transform field mapping using JMESPath  
 
 ```yaml
-mappings:
-  - source_field: "metadata.acquisition.datetime"
-    target_field: "properties.datetime"
-    type: datetime
+field_mapping:
+  properties.datetime: "metadata.acquisition.datetime"
+  properties.platform: "platform_info.name"
 ```
 
 ---
@@ -235,30 +275,47 @@ class OutputResult(TypedDict):
     Provides information about files written during output.
     """
     files_written: list[str]    # Absolute paths to written files
-    manifest_path: str          # Path to manifest.json
-    manifest: dict              # Full manifest content (see Section 4)
 ```
 
 ---
 
-## 7. Workflow Result Schema
-
-Result structure returned by `StacManager.execute()`:
-
 ```python
-from typing import TypedDict, Literal
+from pydantic import BaseModel, Field
+from typing import Literal
 
-class WorkflowResult(TypedDict):
+class WorkflowResult(BaseModel):
     """
-    Result of a complete workflow execution.
+    Result of a complete workflow execution returned by StacManager.execute().
+    
+    This model provides comprehensive information about workflow execution,
+    including success status, failure details, and performance metrics.
     """
-    success: bool                                              # Overall success (no critical crashes)
-    status: Literal['completed', 'completed_with_failures', 'failed']
-    summary: str                                               # Human-readable summary
-    failure_count: int                                         # Total item-level failures
-    failures_path: str | None                                  # Path to failures.json (if any)
+    success: bool = Field(
+        description="Overall success indicator (True if no critical crashes occurred)"
+    )
+    status: Literal['completed', 'completed_with_failures', 'failed'] = Field(
+        description="Execution status: 'completed' (all items successful), 'completed_with_failures' (some item-level failures collected), 'failed' (workflow crashed)"
+    )
+    summary: str = Field(
+        description="Human-readable summary of execution results"
+    )
+    failure_count: int = Field(
+        ge=0,
+        description="Total number of item-level failures collected during execution"
+    )
+    failures_path: str | None = Field(
+        default=None,
+        description="Absolute path to failures.json file if any failures occurred, None otherwise"
+    )
+    total_items_processed: int = Field(
+        ge=0,
+        description="Total number of items that entered the pipeline"
+    )
+    duration_seconds: float = Field(
+        ge=0.0,
+        description="Total execution time in seconds"
+    )
 ```
-
 ---
 
 ## 8. Summary
@@ -266,9 +323,9 @@ class WorkflowResult(TypedDict):
 This document defines:
 
 1. **Streaming Requirement**: Use `AsyncIterator` not `list` for items
-2. **TransformedItem**: Contract between Transform and Scaffold modules
-3. **Failure Report**: Complete schema for error tracking
-4. **Output Manifest**: Complete schema for documenting written files
+2. **Wire Format**: Strict `dict` usage for inter-module communication
+3. **Intermediate Data**: Standard STAC Item `dict` structure used throughout
+4. **Failure Report**: Complete schema for error tracking
 5. **Query Language**: JMESPath for field mapping
 6. **OutputResult**: Return type for OutputModule.finalize()
 7. **WorkflowResult**: Return type for StacManager.execute()
