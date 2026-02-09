@@ -60,16 +60,15 @@ steps:
     # The keys are target field names in item properties
     # The values are JMESPath queries applied to the input entry
     field_mapping:
-      cloud_cover_extra: "cloud_cover"
-      snow_cover_extra: "snow_cover"
+      properties.cloud_cover_extra: "cloud_cover"
+      properties.snow_cover_extra: "snow_cover"
 
 #Step 4: Validate enriched items  
-#Temporarily disabled for debugging
 - id: validate
   module: ValidateModule
   depends_on: [ transform ]
   config:
-    strict: false
+    strict: true
 
 # Step 5: Output to persistent collection structure
 - id: output
