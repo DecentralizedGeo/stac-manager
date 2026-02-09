@@ -11,7 +11,10 @@
 
 STAC Manager is a Python library for building, orchestrating, and executing modular STAC data pipelines. It enables you to ingest STAC items from APIs or files, transform and enrich Item metadata from external input data (JSON/CSV), validate Item compliance, extend Items with extension properties, and output to various formats—all through declarative YAML configuration or a programmatic Python API.
 
-Built on the **Pipes and Filters** architecture, STAC Manager provides 7 specialized modules that compose into powerful workflows while maintaining simplicity and testability.
+Built on the **Pipes and Filters** architecture, STAC Manager provides specialized modules that compose into powerful workflows while maintaining simplicity and testability.
+
+> [!IMPORTANT]
+> STAC Manager is a work in progress with new functionality added frequently.
 
 ---
 
