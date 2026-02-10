@@ -6,6 +6,19 @@
 # Python related context
 __pycache__
 
+# Testing
+.pytest_cache
+.coverage
+htmlcov/
+
+# VSCode
+.vscode/
+
+# Profiling results
+scripts/profiling/results/*.json
+scripts/profiling/results/*.md
+scripts/profiling/test_data/
+
 # log files and data
 logs
 results
