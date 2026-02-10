@@ -27,43 +27,49 @@ def cli():
 
 
 @cli.command()
-@click.option('--test-size', default=1000, help='Number of test items to generate')
-@click.option('--concurrency', default='1,5,10', help='Comma-separated concurrency levels')
-@click.option('--output', default='results/file_benchmark.json', help='Output file path')
-def file(test_size: int, concurrency: str, output: str):
+@click.option('--source', type=click.Path(exists=True, path_type=Path), help='Use existing items directory (skips test generation)')
+@click.option('--test-size', default=1000, help='Number of test items to generate (ignored if --source provided)')
+@click.option('--concurrency', default='1,5,10', help='Comma-separated worker counts')
+@click.option('--output', type=click.Path(path_type=Path), required=True, help='Output JSON path')
+def file(source: Path, test_size: int, concurrency: str, output: Path):
     """Benchmark file mode ingestion."""
-    click.echo(f"File mode benchmark: {test_size} items")
     
-    # Parse concurrency levels
-    concurrency_levels = [int(x.strip()) for x in concurrency.split(',')]
+    # Determine source directory
+    if source:
+        test_dir = source
+        click.echo(f"File mode benchmark using existing items: {test_dir}")
+    else:
+        test_dir = Path("scripts/profiling/test_data/benchmark_items")
+        click.echo(f"File mode benchmark: {test_size} items")
+        click.echo(f"Generating {test_size} test items in {test_dir}...")
+        generate_item_files(test_dir, test_size)
     
-    # Generate test data
-    test_dir = Path("scripts/profiling/test_data/benchmark_items")
-    click.echo(f"Generating {test_size} test items in {test_dir}...")
-    generate_item_files(test_dir, count=test_size)
-    
-    # Run benchmarks
     results: List[BenchmarkResult] = []
+    worker_counts = [int(x.strip()) for x in concurrency.split(',')]
     
-    # Sequential baseline
+    # Run sequential baseline (always first)
     click.echo("Running sequential baseline...")
     seq_result = asyncio.run(benchmark_sequential_files(test_dir))
     results.append(seq_result)
     click.echo(f"  ✓ {seq_result.throughput_items_per_sec:.0f} items/s")
     
-    # Concurrent benchmarks
-    for workers in concurrency_levels:
+    # Run concurrent benchmarks
+    for workers in worker_counts:
         if workers == 1:
-            continue  # Skip sequential again
+            continue  # Skip - already have sequential
             
         click.echo(f"Running with {workers} workers...")
         conc_result = asyncio.run(benchmark_concurrent_files(test_dir, workers))
-        conc_result.baseline_duration_seconds = seq_result.duration_seconds
+        
+        # Calculate speedup vs baseline
+        conc_result.baseline_result = seq_result
+        
         results.append(conc_result)
-        click.echo(f"  ✓ {conc_result.throughput_items_per_sec:.0f} items/s ({conc_result.speedup:.1f}x)")
+        speedup = conc_result.speedup or 1.0
+        click.echo(f"  ✓ {conc_result.throughput_items_per_sec:.0f} items/s ({speedup:.1f}x)")
     
     # Save results
-    output_path = Path(output)
+    output_path = output
     save_results_json(results, output_path)
     
     report_path = output_path.with_name(output_path.stem + "_report.md")
