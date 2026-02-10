@@ -104,7 +104,7 @@ Bulletproof skill that:
 ## Usage Example
 
 When encountering a bug:
-1. Load skill: .github/skills/systematic-debugging/
+1. Load skill: .github/skills/systematic-debugging/SKILL.md
 2. Read overview (10 sec) - reminded of mandate
 3. Follow Phase 1 checklist - forced investigation
 4. If tempted to skip - see anti-pattern, stop
