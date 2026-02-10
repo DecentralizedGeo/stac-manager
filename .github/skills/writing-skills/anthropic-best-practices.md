@@ -374,7 +374,7 @@ Here's the actual information...
 ```markdown  theme={null}
 # SKILL.md
 
-**Basic usage**: [instructions in SKILL.md
+**Basic usage**: [instructions in SKILL.md]
 **Advanced features**: See [advanced.md](advanced.md)
 **API reference**: See [reference.md](reference.md)
 **Examples**: See [examples.md](examples.md)

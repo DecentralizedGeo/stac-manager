@@ -54,7 +54,7 @@ Framework designed to resist rationalization under pressure:
 
 ## Testing Approach
 
-Created 4 validation tests following .github/skills/meta/testing-skills-with-subagents:
+Created 4 validation tests following documented testing best practices:
 
 ### Test 1: Academic Context (No Pressure)
 - Simple bug, no time pressure
@@ -82,7 +82,7 @@ Created 4 validation tests following .github/skills/meta/testing-skills-with-sub
 - Flowchart for "fix failed" decision
 
 ### Enhancement 1: TDD Reference
-- Added link to .github/skills/testing/test-driven-development
+- Added link to .github/skills/test-driven-development/
 - Note explaining TDD's "simplest code" ≠ debugging's "root cause"
 - Prevents confusion between methodologies
 
