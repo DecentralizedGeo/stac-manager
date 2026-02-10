@@ -260,7 +260,7 @@ You: Searching...
 
 **Verification:**
 ```bash
-wc -w skills/path/SKILL.md
+wc -w .github/skills/path/SKILL.md
 # getting-started workflows: aim for <150 each
 # Other frequently-loaded: aim for <200 total
 ```

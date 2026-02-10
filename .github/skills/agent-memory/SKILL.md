@@ -7,13 +7,13 @@ description: Use to maintain technical continuity, architecture context, and use
 
 ## Overview
 
-Use this skill to treat the `.agent/memory/` directory as a "Long-Term Memory" store. This ensures that technical insights, user preferences, and implementation patterns survive beyond a single session, preventing context resets.
+Use this skill to treat the `.github/memory/` directory as a "Long-Term Memory" store. This ensures that technical insights, user preferences, and implementation patterns survive beyond a single session, preventing context resets.
 
 **Announce at start:** "I'm using the agent-memory skill to synchronize project context."
 
 ## Memory Components
 
-The memory is stored in specific files within `.agent/memory/`:
+The memory is stored in specific files within `.github/memory/`:
 
 1.  **`episodic.md`**: Chronological log of major decisions, research breakouts, and milestones (The "What happened and why").
 2.  **`semantic.md`**: Technical glossary and architectural map. Core abstractions and library quirks (The "How things work here").
@@ -24,7 +24,7 @@ The memory is stored in specific files within `.agent/memory/`:
 
 ### Step 1: Memory Recall (Associative Activation)
 At the start of any major phase (Planning or Execution):
-1.  **Scan**: Read all files in `.agent/memory/`.
+1.  **Scan**: Read all files in `.github/memory/`.
 2.  **Chain**: Link current requirements to past successes or failures documented in memory.
 3.  **Synthesize**: State how past context influences your current approach.
 
@@ -44,4 +44,4 @@ When logging a milestone in `episodic.md`, maintain the link:
 - **Forget the Noise**: Do not store minor lint fixes or temporary variables. Store **Architectural Intent**.
 
 ## Initialization
-If `.agent/memory/` doesn't exist, create it. Initialize empty files with headers if necessary.
+If `.github/memory/` doesn't exist, create it. Initialize empty files with headers if necessary.

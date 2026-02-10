@@ -5,6 +5,7 @@ description: Review and refine specifications to ensure they are complete bluepr
 # Spec-Driven Development (SDD) Workflow
 
 ## The Core Principle
+
 **The Specification is the Source of Truth.**
 
 This workflow is a **Quality Gate**. Its purpose is to ensure a specification document is sufficiently detailed to serve as a "blueprint" for implementation. You should NOT proceed to implementation planning until the spec passes this review.
@@ -12,7 +13,9 @@ This workflow is a **Quality Gate**. Its purpose is to ensure a specification do
 ## The Review-Refine Cycle
 
 ### Step 1: Deep Read & Architecture Check
+
 // turbo
+
 1. Read the provided specification documents thoroughly
 2. Assess compliance with the **3-Tier Detail Strategy**:
    - **Tier 1 (contracts)**: Are stricter schemas/interfaces defined?
@@ -23,6 +26,7 @@ This workflow is a **Quality Gate**. Its purpose is to ensure a specification do
    - Are error states and edge cases handled?
 
 ### Step 2: Gap Analysis (The Blueprint Test)
+
 // turbo
 4. Ask yourself: *"Could I write the code for this exclusively from this document without asking the user extra questions?"*
 5. Identify **"Reference Leaks"**: Places where the spec assumes knowledge not in the document.
@@ -30,14 +34,16 @@ This workflow is a **Quality Gate**. Its purpose is to ensure a specification do
 7. List these gaps as distinct questions or TODOs.
 
 ### Step 3: Refine the Spec
-8. **Clarify**: Rewrite vague sections with precise language.
-9. **Expand**: Add pseudo-code or schemas where missing.
-10. **Defer**: Explicitly mark out-of-scope items as "Future Work" (don't leave them ambiguous).
-11. **Collaborate**: if critical information is missing, ask the User.
+
+9. **Clarify**: Rewrite vague sections with precise language.
+10. **Expand**: Add pseudo-code or schemas where missing.
+11. **Defer**: Explicitly mark out-of-scope items as "Future Work" (don't leave them ambiguous).
+12. **Collaborate**: if critical information is missing, ask the User.
 
 ## Definition of Done (Greenlight)
 
 The workflow is complete when:
+
 - [ ] No "critical" gaps remain.
 - [ ] The Spec is a self-contained "Blueprint".
 - [ ] You are confident you could hand this spec to another engineer (or agent) to build without confusion.
