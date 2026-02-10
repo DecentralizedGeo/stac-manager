@@ -35,10 +35,10 @@ This workflow is a **Quality Gate**. Its purpose is to ensure a specification do
 
 ### Step 3: Refine the Spec
 
-8. **Clarify**: Rewrite vague sections with precise language.
-2. **Expand**: Add pseudo-code or schemas where missing.
-3. **Defer**: Explicitly mark out-of-scope items as "Future Work" (don't leave them ambiguous).
-4. **Collaborate**: if critical information is missing, ask the User.
+9. **Clarify**: Rewrite vague sections with precise language.
+10. **Expand**: Add pseudo-code or schemas where missing.
+11. **Defer**: Explicitly mark out-of-scope items as "Future Work" (don't leave them ambiguous).
+12. **Collaborate**: if critical information is missing, ask the User.
 
 ## Definition of Done (Greenlight)
 
