@@ -57,7 +57,7 @@ After every 3 tasks:
 
 1. **Full Suite**: Run all project tests.
 2. **Consolidate Memory**: Using `.github/skills/agent-memory/SKILL.md`, record newly learned technical quirks, patterns, or pits in `semantic.md` or `procedural.md`.
-3. **Completion**: Invoke the `@finishing-a-development-branch` skill.
+3. **Completion**: Invoke `.github/skills/finishing-a-development-branch/SKILL.md`.
 
 ---
 
