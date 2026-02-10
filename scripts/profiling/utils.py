@@ -1,12 +1,41 @@
 """Profiling utilities for measuring performance."""
 import time
 import json
+import logging
 import tracemalloc
 from contextlib import contextmanager
-from typing import Iterator, List, Optional
+from typing import Iterator, List, Optional, Any
 from datetime import datetime, timezone
 from dataclasses import dataclass
 from pathlib import Path
+import sys
+
+# Add src to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
+
+from stac_manager.core.context import WorkflowContext
+from stac_manager.core.failures import FailureCollector
+from stac_manager.core.checkpoints import CheckpointManager
+
+
+def create_benchmark_context() -> WorkflowContext:
+    """Create a minimal WorkflowContext for benchmarking.
+    
+    Returns:
+        WorkflowContext configured for profiling use
+    """
+    return WorkflowContext(
+        workflow_id="benchmark-profile",
+        config={},
+        logger=logging.getLogger("benchmark"),
+        failure_collector=FailureCollector(),
+        checkpoints=CheckpointManager(
+            workflow_id="benchmark-profile",
+            collection_id="benchmark-collection",
+            resume_from_existing=False  # Don't load any existing checkpoints
+        ),
+        data={}
+    )
 
 
 @contextmanager

@@ -5,13 +5,16 @@ from pathlib import Path
 from typing import Optional
 import sys
 
-# Add src and tests to path
+# Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "tests"))
 
 from stac_manager.modules.ingest import IngestModule
-from tests.fixtures.context import MockWorkflowContext
-from scripts.profiling.utils import BenchmarkResult, measure_time, measure_memory
+
+# Support both direct execution and pytest imports
+try:
+    from .utils import BenchmarkResult, measure_time, measure_memory, create_benchmark_context
+except ImportError:
+    from utils import BenchmarkResult, measure_time, measure_memory, create_benchmark_context
 
 
 async def benchmark_sequential_files(
@@ -34,7 +37,7 @@ async def benchmark_sequential_files(
     }
     
     ingest = IngestModule(config)
-    context = MockWorkflowContext.create()
+    context = create_benchmark_context()
     
     items_processed = 0
     

@@ -9,11 +9,14 @@ from typing import Optional
 import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "tests"))
 
 from stac_manager.modules.ingest import IngestModule
-from tests.fixtures.context import MockWorkflowContext
-from scripts.profiling.utils import BenchmarkResult, measure_time, measure_memory
+
+# Support both direct execution and pytest imports
+try:
+    from .utils import BenchmarkResult, measure_time, measure_memory, create_benchmark_context
+except ImportError:
+    from utils import BenchmarkResult, measure_time, measure_memory, create_benchmark_context
 
 
 async def benchmark_sequential_api(
@@ -40,7 +43,7 @@ async def benchmark_sequential_api(
     }
     
     ingest = IngestModule(config)
-    context = MockWorkflowContext.create()
+    context = create_benchmark_context()
     
     items_processed = 0
     
